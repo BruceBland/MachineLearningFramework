@@ -1,3 +1,17 @@
+###########################################################
+#
+# Machine Learning Framework
+#
+# For Random Forrests and SVM models only
+#
+###########################################################
+#
+# Designed to ensure that data is correctly partioned, and processed 
+#
+# By B. G. Bland (Fidessa RAID Team)
+#
+
+
 # Example Framework code
 rm(list=ls())
 
@@ -49,7 +63,7 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
   # Use example iris data set
   DataFrame <- mtcars
   
-
+  
   
   return(DataFrame)
 }
@@ -69,7 +83,7 @@ PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE)
   return(ListOfDataFrames)
 }
 
-TrainingModel <- function(DataFrame,ColumnNames,PredictVariable="S",NTrees=5,
+TrainingModelRF <- function(DataFrame,ColumnNames,PredictVariable="S",NTrees=5,
                           Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
 {
   if (Debug==TRUE) {print("Training on data")}
@@ -99,15 +113,97 @@ TrainingModel <- function(DataFrame,ColumnNames,PredictVariable="S",NTrees=5,
   
 }
 
-Predict <- function(DataFrame,Model,
+PredictRF <- function(DataFrame,ColumnNames,Model,
                     Backtest=TRUE,Debug=TRUE)
 {
   if (Debug==TRUE) {print("Predicting from model and data")}
   
-  DataFrame$Prediction <- predict(Model,DataFrame)
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  DataFrame$Prediction <- predict(Model,VariableColumns)
   
   return(DataFrame)
 }
+
+TrainingModelRFRLT <- function(DataFrame,ColumnNames,PredictVariable="",NTrees=10,
+                            Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
+{
+  if (Debug==TRUE) {print("Training on data")}
+  
+  library(RLT)
+  
+  # Select Cols required
+  PredictVariable <- DataFrame[,PredictVariable]
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  # Run model
+  Model = RLT(VariableColumns, PredictVariable,
+              model = "regression",
+              use.cores = 7,
+              ntrees = NTrees)
+  
+  # Save model if required
+  if (SaveModel == TRUE) {saveRDS(Model, "RandomForestRLT.rds")}
+  
+  # Plot importance
+  if (PlotImportance == TRUE) {barplot(Model$VarImp)}
+
+  return(Model)
+  
+}
+
+PredictRFRLT <- function(DataFrame,ColumnNames,Model,
+                      Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("Predicting from RF RLT model and data")}
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  PredictionList <- predict(Model,VariableColumns)
+  
+  DataFrame$Prediction <- PredictionList[[2]]   # Select only the predictions
+  
+  return(DataFrame)
+  
+}
+
+TrainingModelSVM <- function(DataFrame,ColumnNames,PredictVariable="",NTrees=10,
+                               Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
+{
+  if (Debug==TRUE) {print("Training on data")}
+  
+  library(e1071)
+  
+  # Select Cols required
+  PredictVariable <- DataFrame[,PredictVariable]
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  Model <- svm(VariableColumns, PredictVariable)
+  
+  if (PlotImportance==TRUE)
+  {
+    print(summary(Model))
+  }
+  
+  return(Model)
+  
+}
+
+PredictSVM <- function(DataFrame,ColumnNames,Model,
+                         Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("Predicting from RF RLT model and data")}
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  PredictionList <- predict(Model,VariableColumns)
+  
+  DataFrame$Prediction <- PredictionList   
+  
+  return(DataFrame)
+  
+}
+
 
 PostProcess <- function(DataFrame,PredictVariable="",
                         Backtest=TRUE,Debug=TRUE)
@@ -123,6 +219,7 @@ PostProcess <- function(DataFrame,PredictVariable="",
   
   RMSE <- sqrt(sum(DataFrame$Error^2))
   DataFrame <- data.frame(Desc="RMS Error",RMSE=RMSE)
+  
   return(DataFrame)
 }
 
@@ -149,19 +246,26 @@ if (nrow(DataFrame)>0)
                                  Backtest=TRUE,
                                  Debug=TRUE)
   # Training
-  Model <-     TrainingModel(ListOfDataFrames[[1]],
+  Model <-     TrainingModelSVM(ListOfDataFrames[[1]],
                              c("Cyl","Displace","HP","Gears"),
                              PredictVariable="carb",
-                             NTrees=5,
+                             NTrees=10,
                              SaveModel=FALSE,
                              PlotImportance=TRUE)
   
   # Predict from training
-  TrainingPredictions <- Predict(ListOfDataFrames[[1]],Model,
-                                 Backtest=TRUE,Debug=TRUE)
+  TrainingPredictions <- PredictSVM(ListOfDataFrames[[1]],
+                                      c("Cyl","Displace","HP","Gears"),
+                                      Model,
+                                      Backtest=TRUE,
+                                      Debug=TRUE)
+  
   # Predict testing set
-  TestingPredictions <- Predict(ListOfDataFrames[[2]],Model,
-                                Backtest=TRUE,Debug=TRUE)
+  TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],c("Cyl","Displace","HP","Gears"),
+                                     Model,
+                                     Backtest=TRUE,
+                                     Debug=TRUE)
+  
   # Do results processing
   ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable="carb",
                                   Backtest=TRUE,Debug=TRUE)
