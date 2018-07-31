@@ -1,0 +1,256 @@
+###########################################################
+#
+# Machine Learning Framework
+#
+# For Neural Network models only
+#
+# Developed with automatic scalling for data entered
+#
+###########################################################
+#
+# Designed to ensure that data is correctly partioned, and processed 
+#
+# By B. G. Bland (Fidessa RAID Team)
+#
+#
+
+set.seed(500)       # Remove this if reproducable results not required
+
+# Example Framework code
+rm(list=ls())
+
+# Add library functions here - You may need to install them if they do not already exist
+library(ggplot2)
+library(neuralnet)
+
+# Configure the training parameters here
+#
+#   Note: This example uses the built in mtcars data frame
+#         and predicts the number of cylinders the car has
+#
+#       [, 1]	mpg	 - Miles/(US) gallon
+#       [, 2]	cyl	 - Number of cylinders
+#       [, 3]	disp - Displacement (cu.in.)
+#       [, 4]	hp	 - Gross horsepower
+#       [, 5]	drat - Rear axle ratio
+#       [, 6]	wt	 - Weight (1000 lbs)
+#       [, 7]	qsec - 1/4 mile time
+#       [, 8]	vs	 - Engine (0 = V-shaped, 1 = straight)
+#       [, 9]	am	 - Transmission (0 = automatic, 1 = manual)
+#       [,10]	gear - Number of forward gears
+#       [,11]	carb - Number of carburetors
+
+ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt") # Reduce data set from original
+DisplayColumnNames <- c("Carbs","Cyl","Displace","HP","Gears","Weight")    # Rename the columns
+PredictionVariable <- "Cyl"                                      # y^ the prediction variable
+VariableNames <-  c("Carbs","Displace","HP","Gears","Weight")    # Variables without prediction variable
+
+# Function to load a check data 
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("Loading data")}
+  
+  # Use example iris data set
+  DataFrame <- mtcars
+  
+  return(DataFrame)
+}
+
+# Split function
+SplitData <- function(DataFrame,PercentageToSplit)
+{
+  
+  OriginalDataFrame <- DataFrame
+  
+  # Will add index column
+  DataFrame$x <- seq(1,nrow(DataFrame))
+  
+  ## 70% of the sample size
+  smp_size <- floor(PercentageToSplit/100 * nrow(DataFrame))
+  
+  # Create sampling index
+  train_index <- sample(DataFrame$x, size = smp_size)
+  
+  DataFrame$x <- NULL
+  
+  # Now split te data into training and test
+  OriginalTrain <- DataFrame[train_index,]
+  OriginalTest <- DataFrame[-train_index,]
+
+  # Create a scaled data frame which we can then split
+  maxs <- apply(DataFrame, 2, max) 
+  mins <- apply(DataFrame, 2, min)
+  scaled <- as.data.frame(scale(DataFrame, center = mins, scale = maxs - mins))
+  
+  # Now split te data into training and test
+  train <- scaled[train_index,]
+  test <- scaled[-train_index,]
+  
+  # Return list of data frames
+  ReturnList <- list(train,test,OriginalTrain,OriginalTest)
+  
+  return(ReturnList)
+  
+}
+
+
+
+
+# Function to pre-process the data
+PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("PreProcessing data")}
+  
+  # Generic code
+  DataFrame <- DataFrame[,Columns]
+  colnames(DataFrame) <- ColumnNames
+  
+  # Split data
+  ListOfDataFrames <- SplitData(DataFrame,PercentageToSplit=80)
+  
+  return(ListOfDataFrames)
+}
+
+# Call neural network and return the model of the network
+TrainingModelNN <- function(DataFrame,ColumnNames,PredictVariable="S",HiddenNodes="",
+                            Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
+{
+  if (Debug==TRUE) {print("Training on data")}
+  
+  
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  PredictVariableDF <- DataFrame[,PredictVariable]
+  DataFrame <- cbind(VariableColumns,PredictVariableDF)
+  
+  n <- names(VariableColumns)
+  f <- as.formula(paste("PredictVariableDF ~", paste(n[!n %in% PredictVariable], collapse = " + ")))
+ 
+  Model <- neuralnet(f,data=DataFrame,hidden=HiddenNodes,linear.output=T) # Linear.output = TRUE for regression
+  
+  # Save model if required
+  if (SaveModel == TRUE) {saveRDS(Model, "NeuralNetworkModel.rds")}
+  
+  return(Model)
+  
+}
+
+# Use model to predict results
+# Take extreame care when editing this function to ensure no contamination of results
+PredictNN <- function(DataFrame="",OriginalDataFrame="",PredictVariable="",ColumnNames,Model,Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("Predicting from model and data")}
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  Results <- compute(Model,VariableColumns)
+  
+  ScalledResults <- Results[[2]]               # Get the results from the list returned
+  
+  # Now unscale the results
+  OrigDF <- OriginalDataFrame
+  
+  PredictVariableDF <- OrigDF[,PredictVariable] 
+  
+  OriginalDataFrame$Prediction <- ScalledResults * (max(PredictVariableDF)-min(PredictVariableDF)) + min(PredictVariableDF)
+  
+  return(OriginalDataFrame)
+  
+}
+
+# Process the RMSE and any other functions on the returned data
+# Add code to further process data here
+PostProcess <- function(DataFrame,PredictVariable,Backtest=TRUE,Debug=TRUE,TestingSet=FALSE)
+{
+  
+  if (TestingSet == FALSE)
+  {
+    Title = "Training Data"
+    if (Debug==TRUE) {print("Post processing training data")}
+  } else {
+    Title = "Testing Data"
+    if (Debug==TRUE) {print("Post processing testing data")}
+  }
+  
+  PredictVariable <- DataFrame[,PredictVariable] 
+  
+  # reformat data
+  DataFrame$Actual <- PredictVariable
+  DataFrame$Error <- DataFrame$Prediction - PredictVariable
+  
+  print(DataFrame)
+  
+  RMSE <- sqrt(sum(DataFrame$Error^2))
+  ReturnDataFrame <- data.frame(Desc="RMS Error",RMSE=RMSE)
+  
+  # Now plot the results
+  ResultsPlot <- ggplot(DataFrame,aes(x=Actual)) +
+    geom_point(aes(x=Actual,y=Prediction),
+                   colour="Blue",
+                   fill="DarkBlue") +
+    xlab("Actual Value") +
+    ylab("Prediction") +
+    theme(plot.title = element_text(size = 12),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          text = element_text(size = 8)) +
+    ggtitle(paste("Actual versus Predicted - ",Title))
+  
+  print(ResultsPlot)
+  
+  return(ReturnDataFrame)
+}
+
+
+# Load data
+MLDataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE)
+
+
+# The below functions show carry out all the work
+if (nrow(MLDataFrame)>0) 
+{
+  # Pre-Process
+  ListOfDataFrames <- PreProcess(MLDataFrame,ColumnsToSelectForTraining,
+                                 DisplayColumnNames,
+                                 Backtest=TRUE,
+                                 Debug=TRUE)
+  # Training
+  Model <-     TrainingModelNN(ListOfDataFrames[[1]],
+                                PredictVariable=PredictionVariable,
+                                HiddenNodes=c(8,2),
+                                SaveModel=FALSE,
+                                PlotImportance=TRUE)
+  
+  # Predict training set
+  TestingPredictions <- PredictNN(DataFrame=ListOfDataFrames[[1]],
+                                  OriginalDataFrame=ListOfDataFrames[[3]],
+                                  PredictVariable=PredictionVariable,
+                                  VariableNames,
+                                  Model,
+                                  Backtest=TRUE,
+                                  Debug=TRUE)
+  # Find error from training set
+  ResultsDataFrame <- PostProcess(TestingPredictions,
+                                  PredictVariable=PredictionVariable,
+                                  Backtest=TRUE,Debug=TRUE,TestingSet=FALSE)
+  print(ResultsDataFrame)
+  print("Should be 0.650172179 - Unit test")
+  
+  # Predict testing set
+  TestingPredictions <- PredictNN(DataFrame=ListOfDataFrames[[2]],
+                                  OriginalDataFrame=ListOfDataFrames[[4]],
+                                  PredictVariable=PredictionVariable,
+                                  VariableNames,
+                                  Model,
+                                  Backtest=TRUE,
+                                  Debug=TRUE)
+  
+  # Find error from testing set
+  ResultsDataFrame <- PostProcess(TestingPredictions,
+                                  PredictVariable=PredictionVariable,
+                                  Backtest=TRUE,Debug=TRUE,TestingSet=TRUE)
+  print(ResultsDataFrame)
+  print("Should be 0.331291023 - Unit test")
+} else {
+  print("No data found")
+}
