@@ -1,6 +1,6 @@
-# MachineLearningFramework
+ # Machine Learning Frameworks
 
-Basic Framework for Machine learning based projects
+Basic Frameworks for Machine learning based projects
 
 Create by Bruce Bland
 
