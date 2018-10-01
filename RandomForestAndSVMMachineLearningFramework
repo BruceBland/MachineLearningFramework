@@ -10,7 +10,7 @@
 #
 # By B. G. Bland (Fidessa RAID Team)
 #
-set.seed(500)
+set.seed(500) # Forces same random number to be produced
 
 # Example Framework code
 rm(list=ls())
@@ -35,10 +35,21 @@ library(ggplot2)
 # Edit these variables to control the columns to fit 
 ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt") # Reduce data set from original
 DisplayColumnNames <- c("Carbs","Cyl","Displace","HP","Gears","Weight")    # Rename the columns
-PredictionVariable <- "Cyl"                                      # y^ the prediction variable
-VariableNames <-  c("Carbs","Displace","HP","Gears","Weight")    # Variables without prediction variable
+                                 
+# Prediction variable
+PredictionVariable <- "Cyl"                                          # y^ the prediction variable
+VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+
 RegressionModel <- "SVM"   # Can be SVM , RF or RFRLT
-NumberOfTrees <- 15
+RegressionType <- "regression" #  regression, classification
+NumberOfTrees <- 10
+SplitPercent <- 30/100
+
+#####################################################################################
+#
+# Functions - Edit the Data Load and Format Function to ingest the data
+#
+#####################################################################################
 
 # Function to load a check data 
 DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
@@ -51,14 +62,36 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
   return(DataFrame)
 }
 
+## Quick summary of data we are using to compute the column type and number of levels
+DataAnalysis <- function(DataFrame)
+{
+  print("  Unique Values in DataFrame")
+  Cols <- colnames(DataFrame)
+  for (col in Cols)
+  {
+    # Select the column number
+    ColNo <- which(Cols == col)
+    print(paste("    Items from column",col,"No types =",length(unique(DataFrame[,ColNo]))))
+    print(paste("    Class for column",col,"=",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+    
+    # Now print the top 50 unique values in the column
+    for (i in head(unique(DataFrame[,ColNo]),50)){print(paste("        ",col,"=",i))}
+    
+  }
+  print("   Summary of data frame")
+  Sm <- summary(DataFrame)
+  print(Sm)
+  
+}
+
 # Split function
-SplitData <- function(DataFrame,PercentageToSplit)
+SplitData <- function(DataFrame,PercentToSplit)
 {
   # Will add index column
   DataFrame$x <- seq(1,nrow(DataFrame))
   
-  ## 70% of the sample size
-  smp_size <- floor(0.70 * nrow(DataFrame))
+  ## Number of rows to sample
+  smp_size <- floor(PercentToSplit * nrow(DataFrame))
   
   # Create sampling index
   train_ind <- sample(DataFrame$x, size = smp_size)
@@ -67,6 +100,10 @@ SplitData <- function(DataFrame,PercentageToSplit)
   train <- DataFrame[train_ind, ]
   test <- DataFrame[-train_ind, ]
   
+  # Now remove the x variable
+  train$x <- NULL
+  test$x <- NULL
+  
   # Return list of data frames
   ReturnList <- list(train,test)
   
@@ -74,7 +111,7 @@ SplitData <- function(DataFrame,PercentageToSplit)
 }
 
 # Function to pre-process the data
-PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE)
+PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,PercentageToSplit=0)
 {
   if (Debug==TRUE) {print("PreProcessing data")}
   
@@ -83,13 +120,13 @@ PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE)
   colnames(DataFrame) <- ColumnNames
   
   # Split data
-  ListOfDataFrames <- SplitData(DataFrame,PercentageToSplit=80)
+  ListOfDataFrames <- SplitData(DataFrame,PercentToSplit=PercentageToSplit)
   
   return(ListOfDataFrames)
 }
 
 TrainingModelRF <- function(DataFrame,ColumnNames,PredictVariable="S",NTrees=5,
-                          Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
+                            Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
 {
   if (Debug==TRUE) {print("Training on data using RF Model")}
   
@@ -100,6 +137,9 @@ TrainingModelRF <- function(DataFrame,ColumnNames,PredictVariable="S",NTrees=5,
   VariableColumns <- DataFrame[,ColumnNames]
   
   DataFrame <- cbind(VariableColumns,PredictVariable)
+  
+  #Print the fitting parameters
+  print(paste("ntrees = ",NTrees))
   
   # Train
   Model = randomForest(PredictVariable ~ . ,
@@ -112,14 +152,14 @@ TrainingModelRF <- function(DataFrame,ColumnNames,PredictVariable="S",NTrees=5,
   if (SaveModel == TRUE) {saveRDS(Model, "RandomForest.rds")}
   
   # Plot importance
-  if (PlotImportance == TRUE) {ImportancePlot(Model,"Example Importance Plot","Random Forest Model")}
+  #if (PlotImportance == TRUE) {ImportancePlot(Model,"Example Importance Plot","Random Forest Model")}
   
   return(Model)
   
 }
 
 PredictRF <- function(DataFrame,ColumnNames,Model,
-                    Backtest=TRUE,Debug=TRUE)
+                      Backtest=TRUE,Debug=TRUE)
 {
   if (Debug==TRUE) {print("Predicting from model and data using RF Model")}
   
@@ -131,7 +171,7 @@ PredictRF <- function(DataFrame,ColumnNames,Model,
 }
 
 TrainingModelRFRLT <- function(DataFrame,ColumnNames,PredictVariable="",NTrees=10,
-                            Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
+                               Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE,RegType="")
 {
   if (Debug==TRUE) {print("Training on data using RFRLT model")}
   
@@ -143,26 +183,26 @@ TrainingModelRFRLT <- function(DataFrame,ColumnNames,PredictVariable="",NTrees=1
   
   # Run model
   Model = RLT(VariableColumns, PredictVariable,
-              model = "regression",
+              model = RegType, #  regression, classification or survival 
               use.cores = 7,
               ntrees = NTrees,
               importance = TRUE, 
-              reinforcement = TRUE,
+        #      reinforcement = TRUE,
               combsplit = 3,
-              embed.ntrees = 25)
+              embed.ntrees = 50)
   
   # Save model if required
   if (SaveModel == TRUE) {saveRDS(Model, "RandomForestRLT.rds")}
   
   # Plot importance
   if (PlotImportance == TRUE) {barplot(Model$VarImp)}
-
+  
   return(Model)
   
 }
 
 PredictRFRLT <- function(DataFrame,ColumnNames,Model,
-                      Backtest=TRUE,Debug=TRUE)
+                         Backtest=TRUE,Debug=TRUE)
 {
   if (Debug==TRUE) {print("Predicting from RF RLT model and data")}
   
@@ -177,7 +217,7 @@ PredictRFRLT <- function(DataFrame,ColumnNames,Model,
 }
 
 TrainingModelSVM <- function(DataFrame,ColumnNames,PredictVariable="",NTrees=10,
-                               Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
+                             Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
 {
   if (Debug==TRUE) {print("Training on data using Support Vector Machine")}
   
@@ -199,7 +239,7 @@ TrainingModelSVM <- function(DataFrame,ColumnNames,PredictVariable="",NTrees=10,
 }
 
 PredictSVM <- function(DataFrame,ColumnNames,Model,
-                         Backtest=TRUE,Debug=TRUE)
+                       Backtest=TRUE,Debug=TRUE)
 {
   if (Debug==TRUE) {print("Predicting from data using Support Vector Machine model")}
   
@@ -213,45 +253,68 @@ PredictSVM <- function(DataFrame,ColumnNames,Model,
   
 }
 
-
-PostProcess <- function(DataFrame,PredictVariable="",Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel="")
+# Handles the testing of the accuracy of fit extra
+PostProcess <- function(DataFrame,PredictVariable="",Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel="",Variable="",RegType="")
 {
   
   if (TestingSet == FALSE)
   {
-    Title = paste("Training Data with",RegressionModel,"model")
-    if (Debug==TRUE) {print(paste("Post processing training data after running",RegressionModel,"model"))}
+    Title = paste("Training Data with",RegressionModel,"model predicting",Variable)
+    if (Debug==TRUE) {print(paste("Post processing training data after running",RegressionModel,"model predicting",Variable))}
   } else {
-    Title = paste("Testing Data with",RegressionModel,"model")
-    if (Debug==TRUE) {print(paste("Post processing testing data after running",RegressionModel,"model"))}
+    Title = paste("Testing Data with",RegressionModel,"model predicting",Variable)
+    if (Debug==TRUE) {print(paste("Post processing testing data after running",RegressionModel,"model predicting",Variable))}
   }
   
-  PredictVariable <- DataFrame[,PredictVariable]
-  DataFrame$Actual <- PredictVariable
+  PredictVariable1 <- DataFrame[,PredictVariable]
+  DataFrame$Actual <- PredictVariable1
   
-  # reformat data
-  DataFrame$Error <- DataFrame$Prediction - PredictVariable
-  print(DataFrame)
+  # Handle x y type regression results
+  if (RegType =="regression")
+  {
+    # reformat data
+    DataFrame$Error <- DataFrame$Prediction - DataFrame$Actual
+    
+    # Calculate the RMSE and return it as part of the function
+    RMSE <- sqrt(sum(DataFrame$Error^2))
+    ReturnDataFrame <- data.frame(Desc="RMS Error",RMSE=RMSE)
+    
+    # Now plot the results
+    ResultsPlot <- ggplot(DataFrame,aes(x=Actual,y=Prediction)) +
+      geom_point(aes(x=Actual,y=Prediction),
+                 colour="Blue",
+                 fill="DarkBlue") +
+      geom_smooth(method="lm") +
+      xlab("Actual Value") +
+      ylab("Prediction") +
+      theme(plot.title = element_text(size = 12),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10),
+            text = element_text(size = 8)) +
+      ggtitle(paste("Actual versus Predicted - ",Title))
+    print(ResultsPlot)
+    
+  }
   
-  # Calculate the RMSE and return it as part of the function
-  RMSE <- sqrt(sum(DataFrame$Error^2))
-  ReturnDataFrame <- data.frame(Desc="RMS Error",RMSE=RMSE)
+  # Handle classification problems
+  if (RegType =="classification")
+  {
+    # Work out if not equal
+    DataFrame$Error <- ifelse(DataFrame$Prediction == PredictVariable, 1, 0)
+    print(DataFrame)
+    
+    # find errors
+    ErrorsFrame <- subset(DataFrame,DataFrame$Prediction != DataFrame$Actual)
+    print(paste("Number of rows predicted",nrow(DataFrame)))
+    print(paste("Number of errors found",nrow(ErrorsFrame)))
+    
+    
+    ReturnDataFrame <- ErrorsFrame
+    
+  }
   
-  # Now plot the results
-  ResultsPlot <- ggplot(DataFrame,aes(x=Actual)) +
-    geom_point(aes(x=Actual,y=Prediction),
-               colour="Blue",
-               fill="DarkBlue") +
-    xlab("Actual Value") +
-    ylab("Prediction") +
-    theme(plot.title = element_text(size = 12),
-          axis.title.x = element_text(size = 10),
-          axis.title.y = element_text(size = 10),
-          text = element_text(size = 8)) +
-    ggtitle(paste("Actual versus Predicted - ",Title))
   
-  print(ResultsPlot)
-
+  
   return(ReturnDataFrame)
 }
 
@@ -274,52 +337,64 @@ ImportancePlot <- function(Model,Title="",SubTitle="",Caption="")
 }
 
 
-# Load data
+###############################################################################
+#
+#   Main code
+#
+###############################################################################
 
+# Load data
 DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE)
+
 if (nrow(DataFrame)>0) 
 {
   # Pre-Process
   ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
-                                      DisplayColumnNames,
-                                      Backtest=TRUE,
-                                      Debug=TRUE)
+                                 DisplayColumnNames,
+                                 Backtest=TRUE,
+                                 Debug=TRUE,SplitPercent)
+  
+  # Analyse Data
+  DataAnalysis(ListOfDataFrames[[1]])
+  
   if (RegressionModel == "SVM")
   {
     print("Training with Support Vector Machine")
     
-      # Training
-      Model <-     TrainingModelSVM(ListOfDataFrames[[1]],
-                                          VariableNames,
-                                          PredictVariable=PredictionVariable,
-                                          NTrees=NumberOfTrees,
-                                          SaveModel=FALSE,
-                                          PlotImportance=TRUE)
-      
-      # Predict from training
-      TrainingPredictions <- PredictSVM(ListOfDataFrames[[1]],
-                                          VariableNames,
-                                          Model,
-                                          Backtest=TRUE,
-                                          Debug=TRUE)
-      
-      # Do results processing
-      ResultsDataFrame <- PostProcess(TrainingPredictions,PredictVariable=PredictionVariable,
-                                          Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel=RegressionModel)
-      
-      print(ResultsDataFrame)
-      
-      # Predict testing set
-      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],VariableNames,
-                                          Model,
-                                          Backtest=TRUE,
-                                          Debug=TRUE)
-      
-      # Do results processing
-      ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
-                                          Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,RegressionModel=RegressionModel)
-      
-      print(ResultsDataFrame)
+    # Training
+    Model <-     TrainingModelSVM(ListOfDataFrames[[1]],
+                                  VariableNames,
+                                  PredictVariable=PredictionVariable,
+                                  NTrees=NumberOfTrees,
+                                  SaveModel=FALSE,
+                                  PlotImportance=TRUE)
+    
+    # Predict from training
+    TrainingPredictions <- PredictSVM(ListOfDataFrames[[1]],
+                                      VariableNames,
+                                      Model,
+                                      Backtest=TRUE,
+                                      Debug=TRUE)
+    
+    # Do results processing
+    ResultsDataFrame <- PostProcess(TrainingPredictions,PredictVariable=PredictionVariable,
+                                    Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,
+                                    RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                    RegType=RegressionType)
+    
+    
+    # Predict testing set
+    TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],VariableNames,
+                                     Model,
+                                     Backtest=TRUE,
+                                     Debug=TRUE)
+    
+    # Do results processing
+    ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
+                                    Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,
+                                    RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                    RegType=RegressionType)
+    print(ResultsDataFrame)
   }
   
   if (RegressionModel == "RF")
@@ -329,35 +404,36 @@ if (nrow(DataFrame)>0)
     
     # Training
     Model <-     TrainingModelRF(ListOfDataFrames[[1]],
-                                  VariableNames,
-                                  PredictVariable=PredictionVariable,
-                                  NTrees=NumberOfTrees,
-                                  SaveModel=FALSE,
-                                  PlotImportance=TRUE)
+                                 VariableNames,
+                                 PredictVariable=PredictionVariable,
+                                 NTrees=NumberOfTrees,
+                                 SaveModel=FALSE,
+                                 PlotImportance=TRUE)
     
     # Predict from training
     TrainingPredictions <- PredictRF(ListOfDataFrames[[1]],
-                                      VariableNames,
-                                      Model,
-                                      Backtest=TRUE,
-                                      Debug=TRUE)
-    
-    # Do results processing
-    ResultsDataFrame <- PostProcess(TrainingPredictions,PredictVariable=PredictionVariable,
-                                    Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel=RegressionModel)
-    
-    print(ResultsDataFrame)
-    
-    # Predict testing set
-    TestingPredictions <- PredictRF(ListOfDataFrames[[2]],VariableNames,
+                                     VariableNames,
                                      Model,
                                      Backtest=TRUE,
                                      Debug=TRUE)
     
     # Do results processing
-    ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
-                                    Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,RegressionModel=RegressionModel)
+    ResultsDataFrame <- PostProcess(TrainingPredictions,PredictVariable=PredictionVariable,
+                                    Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,
+                                    RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                    RegType=RegressionType)
     
+    # Predict testing set
+    TestingPredictions <- PredictRF(ListOfDataFrames[[2]],VariableNames,
+                                    Model,
+                                    Backtest=TRUE,
+                                    Debug=TRUE)
+    
+    # Do results processing
+    ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
+                                    Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,
+                                    RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                    RegType=RegressionType)
     print(ResultsDataFrame)
   }
   
@@ -367,34 +443,36 @@ if (nrow(DataFrame)>0)
     
     # Training
     Model <-     TrainingModelRFRLT(ListOfDataFrames[[1]],
-                                  VariableNames,
-                                  PredictVariable=PredictionVariable,
-                                  NTrees=NumberOfTrees,
-                                  SaveModel=FALSE,
-                                  PlotImportance=TRUE)
+                                    VariableNames,
+                                    PredictVariable=PredictionVariable,
+                                    NTrees=NumberOfTrees,
+                                    SaveModel=FALSE,
+                                    PlotImportance=TRUE,RegType=RegressionType)
     
     # Predict from training
     TrainingPredictions <- PredictRFRLT(ListOfDataFrames[[1]],
-                                      VariableNames,
-                                      Model,
-                                      Backtest=TRUE,
-                                      Debug=TRUE)
+                                        VariableNames,
+                                        Model,
+                                        Backtest=TRUE,
+                                        Debug=TRUE)
     
     # Do results processing
     ResultsDataFrame <- PostProcess(TrainingPredictions,PredictVariable=PredictionVariable,
-                                    Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel=RegressionModel)
-    
-    print(ResultsDataFrame)
+                                    Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,
+                                    RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                    RegType=RegressionType)
     
     # Predict testing set
     TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],VariableNames,
-                                     Model,
-                                     Backtest=TRUE,
-                                     Debug=TRUE)
+                                       Model,
+                                       Backtest=TRUE,
+                                       Debug=TRUE)
     
     # Do results processing
     ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
-                                    Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,RegressionModel=RegressionModel)
+                                    Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,
+                                    RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                    RegType=RegressionType)
     
     print(ResultsDataFrame)
   }
