@@ -283,7 +283,7 @@ if (nrow(MLDataFrame)>0)
                                   PredictVariable=PredictionVariable,
                                   Backtest=TRUE,Debug=TRUE,TestingSet=FALSE)
   print(ResultsDataFrame)
-  print("Should be 0.650172179 - Unit test")
+  print("Should be 38.98172361 - Unit test")
   
   # Predict testing set
   TestingPredictions <- PredictNN(DataFrame=ListOfDataFrames[[2]],
@@ -299,7 +299,7 @@ if (nrow(MLDataFrame)>0)
                                   PredictVariable=PredictionVariable,
                                   Backtest=TRUE,Debug=TRUE,TestingSet=TRUE)
   print(ResultsDataFrame)
-  print("Should be 0.331291023 - Unit test")
+  print("Should be 95.2474147 - Unit test")
 } else {
   print("No data found")
 }
