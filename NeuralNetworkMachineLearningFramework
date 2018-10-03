@@ -39,21 +39,51 @@ library(neuralnet)
 #       [, 9]	am	 - Transmission (0 = automatic, 1 = manual)
 #       [,10]	gear - Number of forward gears
 #       [,11]	carb - Number of carburetors
-
+#
 ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt") # Reduce data set from original
 DisplayColumnNames <- c("Carbs","Cyl","Displace","HP","Gears","Weight")    # Rename the columns
-PredictionVariable <- "Cyl"                                      # y^ the prediction variable
-VariableNames <-  c("Carbs","Displace","HP","Gears","Weight")    # Variables without prediction variable
+PredictionVariable <- "HP"                                      # y^ the prediction variable
 
-# Function to load a check data 
+TrainingSplitPercent = 80      # Amount you want to use for training
+HiddenLayersStructure = c(3,4,1) # Layers required
+
+VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+
+
+## Quick summary of data we are using to compute the column type and number of levels
+DataAnalysis <- function(DataFrame)
+{
+  print("  Unique Values in DataFrame")
+  Cols <- colnames(DataFrame)
+  for (col in Cols)
+  {
+    # Select the column number
+    ColNo <- which(Cols == col)
+    print(paste("    Items from column",col,"No types =",length(unique(DataFrame[,ColNo]))))
+    print(paste("    Class for column",col,"=",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+    
+    # Now print the top 50 unique values in the column
+    for (i in head(unique(DataFrame[,ColNo]),50)){print(paste("        ",col,"=",i))}
+    
+  }
+  print("   Summary of data frame")
+  Sm <- summary(DataFrame)
+  print(Sm)
+  
+}
+
 DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
 {
+  
   if (Debug==TRUE) {print("Loading data")}
   
   # Use example iris data set
   DataFrame <- mtcars
-  
+
+  DataFrame$carb <- factor(DataFrame$carb)
+  DataFrame$gear <- factor(DataFrame$gear)
   return(DataFrame)
+  
 }
 
 # Split function
@@ -76,7 +106,7 @@ SplitData <- function(DataFrame,PercentageToSplit)
   # Now split te data into training and test
   OriginalTrain <- DataFrame[train_index,]
   OriginalTest <- DataFrame[-train_index,]
-
+  
   # Create a scaled data frame which we can then split
   maxs <- apply(DataFrame, 2, max) 
   mins <- apply(DataFrame, 2, min)
@@ -94,38 +124,53 @@ SplitData <- function(DataFrame,PercentageToSplit)
 }
 
 
-
-
 # Function to pre-process the data
-PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE)
+PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,TrainingSplitPercent=0)
 {
   if (Debug==TRUE) {print("PreProcessing data")}
   
-  # Generic code
+  # Create new dataframe of only the selected columns
   DataFrame <- DataFrame[,Columns]
   colnames(DataFrame) <- ColumnNames
   
+  # Now refactor all the factor columns
+  DataFrame <- as.data.frame(lapply(DataFrame, function (x) if (is.factor(x)) factor(x) else x)) 
+  
+  # One hot encode all the data in the data frame
+  DataFrame = as.data.frame(model.matrix(~.-1,DataFrame))    # Convert to matrix
+  
+  # Remove spaces from the column names and replace with little x
+  names(DataFrame) <-gsub(" ","x", names(DataFrame))
+  
   # Split data
-  ListOfDataFrames <- SplitData(DataFrame,PercentageToSplit=80)
+  ListOfDataFrames <- SplitData(DataFrame,PercentageToSplit=TrainingSplitPercent)
   
   return(ListOfDataFrames)
 }
+
+
 
 # Call neural network and return the model of the network
 TrainingModelNN <- function(DataFrame,ColumnNames,PredictVariable="S",HiddenNodes="",
                             Backtest=TRUE,Debug=TRUE,SaveModel=FALSE,PlotImportance=TRUE)
 {
-  if (Debug==TRUE) {print("Training on data")}
+  HiddenLayers <- paste(HiddenNodes,collapse=",")
+  if (Debug==TRUE) {print(paste("Training on data using hidden layers of ",HiddenLayers))}
   
+  # Get all column names minus the prediction variable
+  VariableNames <- setdiff(colnames(DataFrame),PredictionVariable)
+  VariableColumns <- DataFrame[,VariableNames]
   
-  
-  VariableColumns <- DataFrame[,ColumnNames]
+  # Now create a df will both
   PredictVariableDF <- DataFrame[,PredictVariable]
   DataFrame <- cbind(VariableColumns,PredictVariableDF)
   
+  DataAnalysis(DataFrame)
+  
   n <- names(VariableColumns)
+  
   f <- as.formula(paste("PredictVariableDF ~", paste(n[!n %in% PredictVariable], collapse = " + ")))
- 
+  
   Model <- neuralnet(f,data=DataFrame,hidden=HiddenNodes,linear.output=T) # Linear.output = TRUE for regression
   
   # Save model if required
@@ -141,7 +186,9 @@ PredictNN <- function(DataFrame="",OriginalDataFrame="",PredictVariable="",Colum
 {
   if (Debug==TRUE) {print("Predicting from model and data")}
   
-  VariableColumns <- DataFrame[,ColumnNames]
+  # Get all column names minus the prediction variable
+  VariableNames <- setdiff(colnames(DataFrame),PredictionVariable)
+  VariableColumns <- DataFrame[,VariableNames]
   
   Results <- compute(Model,VariableColumns)
   
@@ -165,10 +212,10 @@ PostProcess <- function(DataFrame,PredictVariable,Backtest=TRUE,Debug=TRUE,Testi
   
   if (TestingSet == FALSE)
   {
-    Title = "Training Data"
+    Title = paste("Training Data prediction of",PredictVariable)
     if (Debug==TRUE) {print("Post processing training data")}
   } else {
-    Title = "Testing Data"
+    Title = paste("Testing Data prediction of",PredictVariable)
     if (Debug==TRUE) {print("Post processing testing data")}
   }
   
@@ -184,12 +231,13 @@ PostProcess <- function(DataFrame,PredictVariable,Backtest=TRUE,Debug=TRUE,Testi
   ReturnDataFrame <- data.frame(Desc="RMS Error",RMSE=RMSE)
   
   # Now plot the results
-  ResultsPlot <- ggplot(DataFrame,aes(x=Actual)) +
+  ResultsPlot <- ggplot(DataFrame,aes(x=Actual,y=Prediction)) +
     geom_point(aes(x=Actual,y=Prediction),
-                   colour="Blue",
-                   fill="DarkBlue") +
+               colour="Blue",
+               fill="DarkBlue") +
     xlab("Actual Value") +
     ylab("Prediction") +
+    geom_smooth(method="lm") +
     theme(plot.title = element_text(size = 12),
           axis.title.x = element_text(size = 10),
           axis.title.y = element_text(size = 10),
@@ -213,13 +261,14 @@ if (nrow(MLDataFrame)>0)
   ListOfDataFrames <- PreProcess(MLDataFrame,ColumnsToSelectForTraining,
                                  DisplayColumnNames,
                                  Backtest=TRUE,
-                                 Debug=TRUE)
+                                 Debug=TRUE,
+                                 TrainingSplitPercent=TrainingSplitPercent)
   # Training
   Model <-     TrainingModelNN(ListOfDataFrames[[1]],
-                                PredictVariable=PredictionVariable,
-                                HiddenNodes=c(8,2),
-                                SaveModel=FALSE,
-                                PlotImportance=TRUE)
+                               PredictVariable=PredictionVariable,
+                               HiddenNodes=HiddenLayersStructure,
+                               SaveModel=FALSE,
+                               PlotImportance=TRUE)
   
   # Predict training set
   TestingPredictions <- PredictNN(DataFrame=ListOfDataFrames[[1]],
