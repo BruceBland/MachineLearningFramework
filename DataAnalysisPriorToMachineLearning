@@ -1,0 +1,140 @@
+###########################################################
+#
+# Machine Learning Framework
+#
+# Data Analysis Stub
+#
+###########################################################
+#
+# Designed to ensure that data is correctly loaded 
+#
+# By B. G. Bland (Fidessa RAID Team)
+
+
+# Clear all previous variables
+rm(list=ls())
+
+library(ggplot2)
+
+# This example uses the mtcars dataset which is provided in base R.
+# Use the following fields to change the behaviour
+
+#[, 1]	mpg	  -   Miles/(US) gallon
+#[, 2]	cyl	  -   Number of cylinders
+#[, 3]	disp	-   Displacement (cu.in.)
+#[, 4]	hp	  -   Gross horsepower
+#[, 5]	drat	-   Rear axle ratio
+#[, 6]	wt	  -   Weight (1000 lbs)
+#[, 7]	qsec	-   1/4 mile time
+#[, 8]	vs	  -   Engine (0 = V-shaped, 1 = straight)
+#[, 9]	am	  -   Transmission (0 = automatic, 1 = manual)
+#[,10]	gear	-   Number of forward gears
+#[,11]	carb	-   Number of carburetors
+
+# Edit these variables to control the columns to fit
+ProjectTitle <- "MTCARS Analysis"
+ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt") # Reduce data set from original
+DisplayColumnNames <- c("Carbs","Cyl","Displace","HP","Gears","Weight")    # Rename the columns
+
+# Prediction variable
+PredictionVariable <- "HP"                                          # y^ the prediction variable
+VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+
+#####################################################################################
+#
+# Functions - Edit the Data Load and Format Function to ingest the data
+#
+#####################################################################################
+
+# Function to load a check data 
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("Loading data")}
+  
+  # Use example MTCARS data set
+  DataFrame <- as.data.frame(mtcars)
+  
+  # Apply filters here
+  DataFrame <- subset(DataFrame,hp > 60)   # Removes the small horsepower records
+  
+  # Apply converstion to factors for columns required
+  DataFrame$carb <- factor(DataFrame$carb)
+  DataFrame$cyl <- factor(DataFrame$cyl)
+  DataFrame$gear <- factor(DataFrame$gear)
+  
+  return(DataFrame)
+}
+
+## Quick summary of data we are using to compute the column type and number of levels
+DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "")
+{
+  print("  Unique Values in DataFrame")
+  Cols <- colnames(DataFrame)
+  
+  for (col in Cols)
+  {
+    # Select the column number
+    ColNo <- which(Cols == col)
+    print(paste("    Items from column *",col,"* No unique values =",length(unique(DataFrame[,ColNo]))))
+    print(paste("    Class for column *",col,"* =",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+    
+    # Now print the top 50 unique values in the column
+    for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
+    
+    # Now print summary if not a factor
+    if (class(DataFrame[,ColNo])!= "factor") {
+      print(summary(DataFrame[,ColNo]))
+    }
+    
+    print(" ")
+    
+    if (col != PredictionVariable)
+    {
+      # Now plot the results
+      Prediction <- which(Cols == PredictionVariable)
+      PredictionCol <- DataFrame[,Prediction]
+      ActualCol <- DataFrame[,ColNo]
+      PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
+      
+      ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
+        geom_point(aes(x=Actual,y=Prediction),
+                   colour="Blue",
+                   fill="DarkBlue") +
+        geom_smooth(method="lm") +
+        xlab(paste(PredictionVariable,"- Predict Column")) +
+        ylab(paste(col,"- Example Column")) +
+        theme(plot.title = element_text(size = 12),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              text = element_text(size = 8)) +
+        ggtitle(paste(PredictionVariable,"versus",col," - ",Title))
+      print(ResultsPlot)
+    }
+  }
+  
+}
+
+# Function to pre-process the data
+PreProcessWithoutSplit <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("PreProcessing data")}
+  
+  # Generic code
+  DataFrame <- DataFrame[,Columns]
+  colnames(DataFrame) <- ColumnNames
+  
+  return(DataFrame)
+}
+
+
+# Get data
+DataFrame <- DataLoadAndFormat(Backtest=FALSE,Debug=TRUE)
+
+# Preprocess function
+DataFrame <- PreProcessWithoutSplit(DataFrame,ColumnsToSelectForTraining,
+                       DisplayColumnNames,
+                       Backtest=TRUE,
+                       Debug=TRUE)
+
+# Check data formats after pre-processing
+DataAnalysis(DataFrame,PredictionVariable,ProjectTitle)
