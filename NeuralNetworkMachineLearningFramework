@@ -13,14 +13,12 @@
 # By B. G. Bland (Fidessa RAID Team)
 #
 #
-
 set.seed(500)       # Remove this if reproducable results not required
 
 # Example Framework code
 rm(list=ls())
 
 # Add library functions here - You may need to install them if they do not already exist
-library(ggplot2)
 library(neuralnet)
 
 # Configure the training parameters here
@@ -40,50 +38,118 @@ library(neuralnet)
 #       [,10]	gear - Number of forward gears
 #       [,11]	carb - Number of carburetors
 #
-ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt") # Reduce data set from original
-DisplayColumnNames <- c("Carbs","Cyl","Displace","HP","Gears","Weight")    # Rename the columns
-PredictionVariable <- "HP"                                      # y^ the prediction variable
+# Edit these variables to control the columns to fit
+ProjectTitle <- "MTCARS Analysis"
+ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
+DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
 
 TrainingSplitPercent = 80      # Amount you want to use for training
 HiddenLayersStructure = c(3,4,1) # Layers required
 
+# Prediction variable
+PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
 VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
 
+# Data Analysis Options
+PrintExamplesinAnalysis <- FALSE
+DrawChartsinAnalysis    <- FALSE
+DrawChartsOfResults     <- FALSE
 
-## Quick summary of data we are using to compute the column type and number of levels
-DataAnalysis <- function(DataFrame)
+# Load ggplot library if charts are required
+if ((DrawChartsinAnalysis == TRUE) || (DrawChartsOfResults == TRUE))
 {
-  print("  Unique Values in DataFrame")
-  Cols <- colnames(DataFrame)
-  for (col in Cols)
-  {
-    # Select the column number
-    ColNo <- which(Cols == col)
-    print(paste("    Items from column",col,"No types =",length(unique(DataFrame[,ColNo]))))
-    print(paste("    Class for column",col,"=",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
-    
-    # Now print the top 50 unique values in the column
-    for (i in head(unique(DataFrame[,ColNo]),50)){print(paste("        ",col,"=",i))}
-    
-  }
-  print("   Summary of data frame")
-  Sm <- summary(DataFrame)
-  print(Sm)
-  
+  print("Loading GGPLOT2 Library")
+  library(ggplot2)
 }
 
-DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
+## Quick summary of data we are using to compute the column type and number of levels
+DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExamples = TRUE,DrawCharts = TRUE)
 {
   
+  print("Data Analysis of DataFrame")
+  print("")
+  
+  if (is.data.frame(DataFrame) == TRUE)
+  {
+    
+    Cols <- colnames(DataFrame)
+    
+    for (col in Cols)
+    {
+      
+      # Select the column number
+      ColNo <- which(Cols == col)
+      print(paste("Column",col))
+      print(paste("    No unique values =",length(unique(DataFrame[,ColNo]))))
+      print(paste("    Class",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+      
+      # Print top five unique items
+      if (PrintExamples == TRUE)
+      {
+        # Now print the top 5 unique values in the column
+        for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
+      }
+      # Now print summary if not a factor
+      if (class(DataFrame[,ColNo])!= "factor") {
+        print(paste("    Min",min(DataFrame[,ColNo]),
+                    "Median",median(DataFrame[,ColNo]),
+                    "Mean",mean(DataFrame[,ColNo]),
+                    "Max",max(DataFrame[,ColNo])))
+      }
+      
+      print(" ")
+      
+      if (DrawCharts == TRUE)
+      {
+        if (col != PredictionVariable)
+        {
+          # Now plot the results
+          Prediction <- which(Cols == PredictionVariable)
+          PredictionCol <- DataFrame[,Prediction]
+          ActualCol <- DataFrame[,ColNo]
+          PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
+          
+          ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
+            geom_point(aes(x=Actual,y=Prediction),
+                       colour="Blue",
+                       fill="DarkBlue",
+                       size=0.5) +
+            geom_smooth(method="lm") +
+            ylab(paste(PredictionVariable,"- Predict Column")) +
+            xlab(paste(col,"- Example Column")) +
+            theme(plot.title = element_text(size = 12),
+                  axis.title.x = element_text(size = 10),
+                  axis.title.y = element_text(size = 10),
+                  text = element_text(size = 8)) +
+            ggtitle(paste(Title,"-",PredictionVariable,"versus",col))
+          print(ResultsPlot)
+        }
+      }
+    }
+  }
+}
+
+
+# Function to load a check data 
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
+{
   if (Debug==TRUE) {print("Loading data")}
   
-  # Use example iris data set
-  DataFrame <- mtcars
-
-  DataFrame$carb <- factor(DataFrame$carb)
-  DataFrame$gear <- factor(DataFrame$gear)
-  return(DataFrame)
   
+  # Use example MTCARS data set
+  DataFrame <- as.data.frame(mtcars)
+  
+  # Apply filters here
+  DataFrame <- subset(DataFrame,hp > 60)   # Removes the small horsepower records
+  
+  # Apply converstion to factors for columns required
+  DataFrame$carb <- factor(DataFrame$carb)
+  DataFrame$cyl <- factor(DataFrame$cyl)
+  DataFrame$gear <- factor(DataFrame$gear)
+  DataFrame$vs <- factor(DataFrame$vs)
+  DataFrame$am <- factor(DataFrame$am)
+  
+  return(DataFrame)
 }
 
 # Split function
@@ -165,8 +231,6 @@ TrainingModelNN <- function(DataFrame,ColumnNames,PredictVariable="S",HiddenNode
   PredictVariableDF <- DataFrame[,PredictVariable]
   DataFrame <- cbind(VariableColumns,PredictVariableDF)
   
-  DataAnalysis(DataFrame)
-  
   n <- names(VariableColumns)
   
   f <- as.formula(paste("PredictVariableDF ~", paste(n[!n %in% PredictVariable], collapse = " + ")))
@@ -207,14 +271,16 @@ PredictNN <- function(DataFrame="",OriginalDataFrame="",PredictVariable="",Colum
 
 # Process the RMSE and any other functions on the returned data
 # Add code to further process data here
-PostProcess <- function(DataFrame,PredictVariable,Backtest=TRUE,Debug=TRUE,TestingSet=FALSE)
+PostProcess <- function(DataFrame,PredictVariable,Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,DrawCharts = FALSE)
 {
   
   if (TestingSet == FALSE)
   {
+    Item <- "Training Set"
     Title = paste("Training Data prediction of",PredictVariable)
     if (Debug==TRUE) {print("Post processing training data")}
   } else {
+    Item <- "Test Set"
     Title = paste("Testing Data prediction of",PredictVariable)
     if (Debug==TRUE) {print("Post processing testing data")}
   }
@@ -228,23 +294,26 @@ PostProcess <- function(DataFrame,PredictVariable,Backtest=TRUE,Debug=TRUE,Testi
   print(DataFrame)
   
   RMSE <- sqrt(sum(DataFrame$Error^2))
-  ReturnDataFrame <- data.frame(Desc="RMS Error",RMSE=RMSE)
+  ReturnDataFrame <- data.frame(Desc=paste(Item,"RMS Error"),RMSE=RMSE)
+  print(ReturnDataFrame)
   
-  # Now plot the results
-  ResultsPlot <- ggplot(DataFrame,aes(x=Actual,y=Prediction)) +
-    geom_point(aes(x=Actual,y=Prediction),
-               colour="Blue",
-               fill="DarkBlue") +
-    xlab("Actual Value") +
-    ylab("Prediction") +
-    geom_smooth(method="lm") +
-    theme(plot.title = element_text(size = 12),
-          axis.title.x = element_text(size = 10),
-          axis.title.y = element_text(size = 10),
-          text = element_text(size = 8)) +
-    ggtitle(paste("Actual versus Predicted - ",Title))
-  
-  print(ResultsPlot)
+  if (DrawCharts == TRUE)
+  {
+    # Now plot the results
+    ResultsPlot <- ggplot(DataFrame,aes(x=Actual,y=Prediction)) +
+      geom_point(aes(x=Actual,y=Prediction),
+                 colour="Blue",
+                 fill="DarkBlue") +
+      geom_smooth(method="lm") +
+      xlab("Actual Value") +
+      ylab("Prediction") +
+      theme(plot.title = element_text(size = 12),
+            axis.title.x = element_text(size = 10),
+            axis.title.y = element_text(size = 10),
+            text = element_text(size = 8)) +
+      ggtitle(paste("Actual versus Predicted - ",Title))
+    print(ResultsPlot)
+  }
   
   return(ReturnDataFrame)
 }
@@ -263,6 +332,14 @@ if (nrow(MLDataFrame)>0)
                                  Backtest=TRUE,
                                  Debug=TRUE,
                                  TrainingSplitPercent=TrainingSplitPercent)
+  
+  # Check data formats after pre-processing
+  DataAnalysis(ListOfDataFrames[[1]],
+               PredictionVariable,
+               ProjectTitle,
+               PrintExamples = PrintExamplesinAnalysis,
+               DrawCharts = DrawChartsinAnalysis)
+  
   # Training
   Model <-     TrainingModelNN(ListOfDataFrames[[1]],
                                PredictVariable=PredictionVariable,
@@ -281,9 +358,9 @@ if (nrow(MLDataFrame)>0)
   # Find error from training set
   ResultsDataFrame <- PostProcess(TestingPredictions,
                                   PredictVariable=PredictionVariable,
-                                  Backtest=TRUE,Debug=TRUE,TestingSet=FALSE)
-  print(ResultsDataFrame)
-  print("Should be 38.98172361 - Unit test")
+                                  Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,
+                                  DrawCharts = DrawChartsOfResults)
+  
   
   # Predict testing set
   TestingPredictions <- PredictNN(DataFrame=ListOfDataFrames[[2]],
@@ -297,9 +374,10 @@ if (nrow(MLDataFrame)>0)
   # Find error from testing set
   ResultsDataFrame <- PostProcess(TestingPredictions,
                                   PredictVariable=PredictionVariable,
-                                  Backtest=TRUE,Debug=TRUE,TestingSet=TRUE)
-  print(ResultsDataFrame)
-  print("Should be 95.2474147 - Unit test")
+                                  Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,
+                                  DrawCharts = DrawChartsOfResults)
+  
+  
 } else {
   print("No data found")
 }
