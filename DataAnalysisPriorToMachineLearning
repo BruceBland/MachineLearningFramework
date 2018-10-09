@@ -33,16 +33,20 @@ library(ggplot2)
 
 # Edit these variables to control the columns to fit
 ProjectTitle <- "MTCARS Analysis"
-ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt") # Reduce data set from original
-DisplayColumnNames <- c("Carbs","Cyl","Displace","HP","Gears","Weight")    # Rename the columns
+ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
+DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
 
 # Prediction variable
-PredictionVariable <- "HP"                                          # y^ the prediction variable
+PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
 VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+
+# Data Analysis Options
+PrintExamplesinAnalysis <- TRUE
+DrawChartsinAnalysis <- TRUE
 
 #####################################################################################
 #
-# Functions - Edit the Data Load and Format Function to ingest the data
+# Functions - Edit the DataLoadandFormat Function to ingest the data
 #
 #####################################################################################
 
@@ -50,6 +54,7 @@ VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
 DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
 {
   if (Debug==TRUE) {print("Loading data")}
+ 
   
   # Use example MTCARS data set
   DataFrame <- as.data.frame(mtcars)
@@ -61,57 +66,83 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
   DataFrame$carb <- factor(DataFrame$carb)
   DataFrame$cyl <- factor(DataFrame$cyl)
   DataFrame$gear <- factor(DataFrame$gear)
+  DataFrame$vs <- factor(DataFrame$vs)
+  DataFrame$am <- factor(DataFrame$am)
   
   return(DataFrame)
 }
 
+###########################################################################################
+#
+# Do not modify beneath here ................
+#
+###########################################################################################
+
 ## Quick summary of data we are using to compute the column type and number of levels
-DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "")
+DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExamples = TRUE,DrawCharts = TRUE)
 {
-  print("  Unique Values in DataFrame")
-  Cols <- colnames(DataFrame)
   
-  for (col in Cols)
+  print("Data Analysis of DataFrame")
+  print("")
+  
+  if (is.data.frame(DataFrame) == TRUE)
   {
-    # Select the column number
-    ColNo <- which(Cols == col)
-    print(paste("    Items from column *",col,"* No unique values =",length(unique(DataFrame[,ColNo]))))
-    print(paste("    Class for column *",col,"* =",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
-    
-    # Now print the top 50 unique values in the column
-    for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
-    
-    # Now print summary if not a factor
-    if (class(DataFrame[,ColNo])!= "factor") {
-      print(summary(DataFrame[,ColNo]))
-    }
-    
-    print(" ")
-    
-    if (col != PredictionVariable)
-    {
-      # Now plot the results
-      Prediction <- which(Cols == PredictionVariable)
-      PredictionCol <- DataFrame[,Prediction]
-      ActualCol <- DataFrame[,ColNo]
-      PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
       
-      ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
-        geom_point(aes(x=Actual,y=Prediction),
-                   colour="Blue",
-                   fill="DarkBlue") +
-        geom_smooth(method="lm") +
-        xlab(paste(PredictionVariable,"- Predict Column")) +
-        ylab(paste(col,"- Example Column")) +
-        theme(plot.title = element_text(size = 12),
-              axis.title.x = element_text(size = 10),
-              axis.title.y = element_text(size = 10),
-              text = element_text(size = 8)) +
-        ggtitle(paste(PredictionVariable,"versus",col," - ",Title))
-      print(ResultsPlot)
+    Cols <- colnames(DataFrame)
+    
+    for (col in Cols)
+    {
+      
+      # Select the column number
+      ColNo <- which(Cols == col)
+      print(paste("Column",col))
+      print(paste("    No unique values =",length(unique(DataFrame[,ColNo]))))
+      print(paste("    Class",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+      
+      # Print top five unique items
+      if (PrintExamples == TRUE)
+      {
+        # Now print the top 5 unique values in the column
+        for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
+      }
+      # Now print summary if not a factor
+      if (class(DataFrame[,ColNo])!= "factor") {
+        print(paste("    Min",min(DataFrame[,ColNo]),
+                    "Median",median(DataFrame[,ColNo]),
+                    "Mean",mean(DataFrame[,ColNo]),
+                    "Max",max(DataFrame[,ColNo])))
+      }
+      
+      print(" ")
+      
+      if (DrawCharts == TRUE)
+      {
+        if (col != PredictionVariable)
+        {
+          # Now plot the results
+          Prediction <- which(Cols == PredictionVariable)
+          PredictionCol <- DataFrame[,Prediction]
+          ActualCol <- DataFrame[,ColNo]
+          PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
+          
+          ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
+            geom_point(aes(x=Actual,y=Prediction),
+                       colour="Blue",
+                       fill="DarkBlue",
+                       size=0.5) +
+            geom_smooth(method="lm") +
+            ylab(paste(PredictionVariable,"- Predict Column")) +
+            xlab(paste(col,"- Example Column")) +
+            theme(plot.title = element_text(size = 12),
+                  axis.title.x = element_text(size = 10),
+                  axis.title.y = element_text(size = 10),
+                  text = element_text(size = 8)) +
+            ggtitle(paste(Title,"-",PredictionVariable,"versus",col))
+          print(ResultsPlot)
+        }
+      }
     }
   }
-  
 }
 
 # Function to pre-process the data
@@ -131,10 +162,17 @@ PreProcessWithoutSplit <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,D
 DataFrame <- DataLoadAndFormat(Backtest=FALSE,Debug=TRUE)
 
 # Preprocess function
-DataFrame <- PreProcessWithoutSplit(DataFrame,ColumnsToSelectForTraining,
-                       DisplayColumnNames,
-                       Backtest=TRUE,
-                       Debug=TRUE)
+DataFrame <- PreProcessWithoutSplit(DataFrame,
+                                      ColumnsToSelectForTraining,
+                                      DisplayColumnNames,
+                                      Backtest=TRUE,
+                                      Debug=TRUE)
 
 # Check data formats after pre-processing
-DataAnalysis(DataFrame,PredictionVariable,ProjectTitle)
+DataAnalysis(DataFrame,
+             PredictionVariable,
+             ProjectTitle,
+             PrintExamples = PrintExamplesinAnalysis,
+             DrawCharts = DrawChartsinAnalysis)
+
+# End of script
