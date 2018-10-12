@@ -1,0 +1,310 @@
+###########################################################
+#
+# Machine Learning Framework
+#
+# For Random Forrests and SVM models only
+#
+###########################################################
+#
+# Designed to ensure that data is correctly partioned, and processed 
+#
+# By B. G. Bland (Fidessa RAID Team)
+#
+set.seed(500) # Forces same random number to be produced
+
+# Example Framework code
+rm(list=ls())
+
+# Edit these variables to control the columns to fit
+ProjectTitle <- "MTCARS Analysis"
+ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
+DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
+
+# Prediction variable
+PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
+VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+SamplingMethod <- FALSE
+
+# Enable checking of results
+CheckingResults <- FALSE
+
+#                   C,Cy,Di,Hp,G,W,S,m
+ThisInputString <- "2,4,400,0,4,100,0,1"
+
+# Regression Options
+RegressionModel <- "RF"                              # Can be SVM , RF or RFRLT
+Model           <- readRDS("RandomForest.rds")       # Model file to be loaded
+                              # Load model
+
+# Note: Comment out factor lines in DataLoadAndFormat function to get SVM to work
+RegressionType  <- "regression"    # Use only regression or classification
+NumberOfTrees   <- 15
+SplitPercent    <- 0.8
+
+#####################################################################################
+#
+# Functions - Edit the Data Load and Format Function to ingest the data
+#
+#####################################################################################
+
+# Function to load a check data 
+DataLoadAndFormatSingleRow <- function(InputString = "",Debug=TRUE)
+{
+  if (InputString != "") {
+    
+    if (Debug==TRUE) {print("Loading single row of data")}
+    
+    ListOfItems <- unlist(strsplit(InputString, ","))
+    
+  
+    carb <- factor(ListOfItems[1],levels= c("1","2","3","4","6","8"))
+    cyl   <- factor(ListOfItems[2],levels= c("4","6","8"))
+    disp <- as.numeric(ListOfItems[3])
+    hp  <- as.numeric(ListOfItems[4])
+    gear       <- factor(ListOfItems[5],levels= c("3","4","5"))
+    wt      <- as.numeric(ListOfItems[6])
+    vs     <- factor(ListOfItems[7],levels= c("0","1"))
+    am <- factor(ListOfItems[8],levels= c("0","1"))
+
+    DataFrame <- data.frame(carb,
+                            cyl,
+                            disp,
+                            hp,
+                            gear,
+                            wt,
+                            vs,
+                            am)
+    
+  }
+}
+
+
+# Function to load a check data 
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE)
+{
+  if (Debug==TRUE) {print("Loading data")}
+  
+  
+  # Use example MTCARS data set
+  DataFrame <- as.data.frame(mtcars)
+  
+  # Apply filters here
+  DataFrame <- subset(DataFrame,hp > 60)   # Removes the small horsepower records
+  
+  # Apply converstion to factors for columns required
+  DataFrame$carb <- factor(DataFrame$carb)
+  DataFrame$cyl <- factor(DataFrame$cyl)
+  DataFrame$gear <- factor(DataFrame$gear)
+  DataFrame$vs <- factor(DataFrame$vs)
+  DataFrame$am <- factor(DataFrame$am)
+  
+  return(DataFrame)
+}
+
+# Function to pre-process the data
+PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,PercentageToSplit=0,UseSampleMethod=TRUE)
+{
+  if (Debug==TRUE) {print("PreProcessing data")}
+  
+  # Generic code
+  DataFrame <- DataFrame[,Columns]
+  colnames(DataFrame) <- ColumnNames
+  
+  return(DataFrame)
+}
+
+
+PredictRF <- function(DataFrame,ColumnNames,Model,
+                      Backtest=TRUE,Debug=TRUE,LoadModel=FALSE)
+{
+  
+  library("randomForest")
+  
+  if (Debug==TRUE) {print("Predicting from model and data using RF Model")}
+  
+  # Load Model required
+  if (LoadModel == TRUE) {
+    Model = readRDS("RandomForest.rds")
+    if (Debug==TRUE) {print(paste("    Loaded from RandomForest.rds"))}
+  }
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  DataFrame$Prediction <- predict(Model,VariableColumns)
+  
+  return(DataFrame)
+  
+}
+
+
+# Handles the testing of the accuracy of fit extra
+PostProcess <- function(DataFrame,PredictVariable="",Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel="",Variable="",RegType="",DrawCharts = FALSE,CheckingOfResults = FALSE)
+{
+  
+  # Only carry out if this was test data
+  if (CheckingOfResults == TRUE)
+  {
+    DataFrame$Real10Mod <- ifelse(DataFrame$Real10 < -0.5,-1,ifelse(DataFrame$Real10 > 0.5,1,0))
+    DataFrame$True <- ifelse((DataFrame$PredictionMod == DataFrame$Real10Mod),1,0)
+    
+    print(paste("No correct",sum(DataFrame$True),"out of",nrow(DataFrame)))
+    
+    PredictionsDataFrame <- subset(DataFrame,PredictionMod != 0)
+    print(paste("Predictions correct",sum(PredictionsDataFrame$True),"out of",nrow(PredictionsDataFrame)))
+    
+    DownPredictionsDataFrame <- subset(DataFrame,PredictionMod < 0)
+    print(paste("Down Predictions correct",sum(DownPredictionsDataFrame$True),"out of",nrow(DownPredictionsDataFrame)))
+    
+    UpPredictionsDataFrame <- subset(DataFrame,PredictionMod > 0)
+    print(paste("Up Predictions correct",sum(UpPredictionsDataFrame$True),"out of",nrow(UpPredictionsDataFrame)))
+  }
+  
+  return(DataFrame)
+  
+}
+## Quick summary of data we are using to compute the column type and number of levels
+DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExamples = TRUE,DrawCharts = TRUE)
+{
+  
+  print("Data Analysis of DataFrame")
+  print("")
+  
+  if (is.data.frame(DataFrame) == TRUE)
+  {
+    
+    Cols <- colnames(DataFrame)
+    
+    for (col in Cols)
+    {
+      
+      # Select the column number
+      ColNo <- which(Cols == col)
+      print(paste("Column",col))
+      print(paste("    No unique values =",length(unique(DataFrame[,ColNo]))))
+      print(paste("    Class",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+      
+      
+      # Print top five unique items
+      if (PrintExamples == TRUE)
+      {
+        # Now print the top 5 unique values in the column
+        for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
+      }
+      # Now print summary if not a factor
+      if (class(DataFrame[,ColNo])!= "factor") {
+        print(paste("    Min",min(DataFrame[,ColNo]),
+                    "Median",median(DataFrame[,ColNo]),
+                    "Mean",mean(DataFrame[,ColNo]),
+                    "Max",max(DataFrame[,ColNo])))
+      } else {
+        print("    Levels")
+        print(levels(DataFrame[,ColNo]))
+      }
+      
+      print(" ")
+      
+      if (DrawCharts == TRUE)
+      {
+        if (col != PredictionVariable)
+        {
+          # Now plot the results
+          Prediction <- which(Cols == PredictionVariable)
+          PredictionCol <- DataFrame[,Prediction]
+          ActualCol <- DataFrame[,ColNo]
+          PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
+          
+          ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
+            geom_point(aes(x=Actual,y=Prediction),
+                       colour="Blue",
+                       fill="DarkBlue",
+                       size=0.5) +
+            geom_smooth(method="lm") +
+            ylab(paste(PredictionVariable,"- Predict Column")) +
+            xlab(paste(col,"- Example Column")) +
+            theme(plot.title = element_text(size = 12),
+                  axis.title.x = element_text(size = 10),
+                  axis.title.y = element_text(size = 10),
+                  text = element_text(size = 8)) +
+            ggtitle(paste(Title,"-",PredictionVariable,"versus",col))
+          print(ResultsPlot)
+        }
+      }
+    }
+  }
+}
+
+
+###############################################################################
+#
+#   Main code
+#
+###############################################################################
+
+Predict <- function(InputString="",Model="",RegressionModel = "",CheckData=FALSE)
+{
+  
+  # Load data
+  if (CheckingResults == TRUE)
+  {
+    DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE)
+    if (CheckData == TRUE)
+    {
+      print(DataFrame)
+    }
+  } else {
+    DataFrame <- DataLoadAndFormatSingleRow(InputString,Debug=FALSE)
+    if (CheckData == TRUE)
+    {
+      print(DataFrame)
+    }
+  }
+  
+  if (nrow(DataFrame)>0) 
+  {
+    # Pre-Process
+    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
+                                   DisplayColumnNames,
+                                   Backtest=TRUE,
+                                   Debug=FALSE,SplitPercent,UseSampleMethod=SampleMethod)
+    
+    if (CheckData == TRUE)
+    {
+      DataAnalysis(ListOfDataFrames,PredictionVariable=PredictionVariable,
+                   Title = "Testing",
+                   PrintExamples = TRUE,
+                   DrawCharts = FALSE)
+    }
+    if (RegressionModel == "RF")
+    {
+      
+      # Predict testing set
+      TestingPredictions <- PredictRF(ListOfDataFrames,VariableNames,
+                                      Model,
+                                      Backtest=TRUE,
+                                      Debug=FALSE,
+                                      LoadModel=FALSE)
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,Debug=FALSE,TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                      RegType=RegressionType,DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+  } else {
+    print("No data found")
+  }
+  
+  return(ResultsDataFrame$Prediction[1])
+  
+}
+
+# Test function
+print(paste("Test call using input string",ThisInputString))
+print(paste("Prediction = ",Predict(ThisInputString,Model,RegressionModel)))
+
+# Test performance
+library(microbenchmark)
+res <- microbenchmark(Predict(ThisInputString,Model,RegressionModel), times=1000L)
+print(res)
