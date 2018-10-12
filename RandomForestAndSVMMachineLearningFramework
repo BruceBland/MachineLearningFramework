@@ -38,6 +38,7 @@ DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","G
 # Prediction variable
 PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
 VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+SamplingMethod <- FALSE
 
 # Data Analysis Options
 PrintExamplesinAnalysis <- TRUE
@@ -47,7 +48,7 @@ DrawImportanceCharts    <- TRUE
 
 # Regression Options
 RegressionModel <- "RF"            # Can be SVM , RF or RFRLT
-                                   # Note: Comment out factor lines in DataLoadAndFormat function to get SVM to work
+# Note: Comment out factor lines in DataLoadAndFormat function to get SVM to work
 RegressionType  <- "regression"    # Use only regression or classification
 NumberOfTrees   <- 15
 SplitPercent    <- 80/100
@@ -156,7 +157,7 @@ DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExample
 }
 
 # Split function
-SplitData <- function(DataFrame,PercentToSplit)
+SplitData <- function(DataFrame,PercentToSplit,SplitUsingSampleMethod=TRUE)
 {
   # Will add index column
   DataFrame$x <- seq(1,nrow(DataFrame))
@@ -164,12 +165,35 @@ SplitData <- function(DataFrame,PercentToSplit)
   ## Number of rows to sample
   smp_size <- floor(PercentToSplit * nrow(DataFrame))
   
-  # Create sampling index
-  train_ind <- sample(DataFrame$x, size = smp_size)
+  print(paste("Using training sample size of",smp_size,"using",PercentToSplit,"% split"))
+  print(paste("From total data set of",nrow(DataFrame),"rows"))
   
-  # Now split te data into training and test
-  train <- DataFrame[train_ind, ]
-  test <- DataFrame[-train_ind, ]
+  if (SplitUsingSampleMethod == TRUE)
+  {
+    
+    print("Using sampling method to select training data")
+    
+    # Create sampling index
+    train_ind <- sample(DataFrame$x, size = smp_size)
+    
+    # Now split te data into training and test
+    train <- DataFrame[train_ind, ]
+    test <- DataFrame[-train_ind, ]
+    
+  } else {
+    
+    print("Using first n% to select training data")
+    
+    # Use the first percentage and test with the remaining
+    train <- DataFrame[1:smp_size,]
+    test <- DataFrame[(smp_size+1):nrow(DataFrame),]
+    
+  }
+  
+  # Check nrows of both
+  print(paste("Number of rows in training set ... ",nrow(train)))
+  print(paste("Number of rows in testing set ... ",nrow(test)))
+  
   
   # Now remove the x variable
   train$x <- NULL
@@ -182,7 +206,7 @@ SplitData <- function(DataFrame,PercentToSplit)
 }
 
 # Function to pre-process the data
-PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,PercentageToSplit=0)
+PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,PercentageToSplit=0,UseSampleMethod=TRUE)
 {
   if (Debug==TRUE) {print("PreProcessing data")}
   
@@ -191,7 +215,7 @@ PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,Pe
   colnames(DataFrame) <- ColumnNames
   
   # Split data
-  ListOfDataFrames <- SplitData(DataFrame,PercentToSplit=PercentageToSplit)
+  ListOfDataFrames <- SplitData(DataFrame,PercentToSplit=PercentageToSplit,SplitUsingSampleMethod=UseSampleMethod)
   
   return(ListOfDataFrames)
 }
@@ -434,7 +458,7 @@ if (nrow(DataFrame)>0)
   ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
                                  DisplayColumnNames,
                                  Backtest=TRUE,
-                                 Debug=TRUE,SplitPercent)
+                                 Debug=TRUE,SplitPercent,UseSampleMethod=SamplingMethod)
   
   # Check data formats after pre-processing
   DataAnalysis(ListOfDataFrames[[1]],
