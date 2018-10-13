@@ -8,7 +8,7 @@
 #
 # Designed to ensure that data is correctly partioned, and processed 
 #
-# By B. G. Bland (Fidessa RAID Team)
+# By B. G. Bland 
 #
 set.seed(500) # Forces same random number to be produced
 
