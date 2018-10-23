@@ -1,0 +1,838 @@
+###########################################################
+#
+# Machine Learning Framework V2.0
+#
+# For 2 x Random Forrests and SVM models only
+#
+###########################################################
+#
+# Designed to ensure that data is correctly partioned, and processed 
+#
+# By B. G. Bland 
+#
+set.seed(500) # Forces same random number to be produced
+
+# Example Framework code
+rm(list=ls())
+
+# This example uses the mtcars dataset which is provided in base R.
+# Use the following fields to change the behaviour
+
+#[, 1]	mpg	  -   Miles/(US) gallon
+#[, 2]	cyl	  -   Number of cylinders
+#[, 3]	disp	-   Displacement (cu.in.)
+#[, 4]	hp	  -   Gross horsepower
+#[, 5]	drat	-   Rear axle ratio
+#[, 6]	wt	  -   Weight (1000 lbs)
+#[, 7]	qsec	-   1/4 mile time
+#[, 8]	vs	  -   Engine (0 = V-shaped, 1 = straight)
+#[, 9]	am	  -   Transmission (0 = automatic, 1 = manual)
+#[,10]	gear	-   Number of forward gears
+#[,11]	carb	-   Number of carburetors
+
+# Edit these variables to control the columns to fit
+ProjectTitle <- "MTCARS Analysis"
+ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
+DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
+
+# Prediction variable
+PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
+VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
+SamplingMethod <- FALSE
+
+# Data Analysis Options
+PrintExamplesinAnalysis <- TRUE
+DrawChartsinAnalysis    <- TRUE
+DrawChartsOfResults     <- TRUE
+DrawImportanceCharts    <- TRUE
+
+# Regression Options
+RegressionModel <- "RF"            # Can be SVM , RF or RFRLT
+RegressionType  <- "regression"    # Use only regression or classification
+NumberOfTrees   <- 15
+SplitPercent    <- 80/100
+ConvertToFactors <- FALSE         # Must be false for SVM
+
+# Load ggplot library if charts are required
+if ((DrawChartsinAnalysis == TRUE) || (DrawChartsOfResults == TRUE) || (DrawImportanceCharts == TRUE))
+{
+  print("Loading GGPLOT2 Library")
+  library(ggplot2)
+}
+
+#####################################################################################
+#
+# Functions - Edit the Data Load and Format Function to ingest the data
+#
+#####################################################################################
+
+# Function to load a check data 
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+{
+  if (Debug==TRUE) {print("Loading data")}
+  
+  
+  # Use example MTCARS data set
+  DataFrame <- as.data.frame(mtcars)
+  
+  # Apply filters here
+  DataFrame <- subset(DataFrame,hp > 60)   # Removes the small horsepower records
+  
+  if (ConvertToFactors==TRUE)
+  {
+      # Apply converstion to factors for columns required
+     DataFrame$carb <- factor(DataFrame$carb)
+     DataFrame$cyl <- factor(DataFrame$cyl)
+     DataFrame$gear <- factor(DataFrame$gear)
+     DataFrame$vs <- factor(DataFrame$vs)
+     DataFrame$am <- factor(DataFrame$am)
+  }
+
+  return(DataFrame)
+  
+}
+
+
+## Quick summary of data we are using to compute the column type and number of levels
+DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExamples = TRUE,DrawCharts = TRUE)
+{
+  
+  print("Data Analysis of DataFrame")
+  print("")
+  
+  if (is.data.frame(DataFrame) == TRUE)
+  {
+    
+    Cols <- colnames(DataFrame)
+    
+    for (col in Cols)
+    {
+      
+      # Select the column number
+      ColNo <- which(Cols == col)
+      print(paste("Column",col))
+      print(paste("    No unique values =",length(unique(DataFrame[,ColNo]))))
+      print(paste("    Class",class(DataFrame[,ColNo]),"with",length(levels(DataFrame[,ColNo])),"levels"))
+      
+      # Print top five unique items
+      if (PrintExamples == TRUE)
+      {
+        # Now print the top 5 unique values in the column
+        for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
+      }
+      # Now print summary if not a factor
+      if (class(DataFrame[,ColNo])!= "factor") {
+        print(paste("    Min",min(DataFrame[,ColNo]),
+                    "Median",median(DataFrame[,ColNo]),
+                    "Mean",mean(DataFrame[,ColNo]),
+                    "Max",max(DataFrame[,ColNo])))
+      }
+      
+      print(" ")
+      
+      if (DrawCharts == TRUE)
+      {
+        if (col != PredictionVariable)
+        {
+          # Now plot the results
+          Prediction <- which(Cols == PredictionVariable)
+          PredictionCol <- DataFrame[,Prediction]
+          ActualCol <- DataFrame[,ColNo]
+          PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
+          
+          ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
+            geom_point(aes(x=Actual,y=Prediction),
+                       colour="Blue",
+                       fill="DarkBlue",
+                       size=0.5) +
+            geom_smooth(method="lm") +
+            ylab(paste(PredictionVariable,"- Predict Column")) +
+            xlab(paste(col,"- Example Column")) +
+            theme(plot.title = element_text(size = 12),
+                  axis.title.x = element_text(size = 10),
+                  axis.title.y = element_text(size = 10),
+                  text = element_text(size = 8)) +
+            ggtitle(paste(Title,"-",PredictionVariable,"versus",col))
+          print(ResultsPlot)
+        }
+      }
+    }
+  }
+}
+
+# Split function
+SplitData <- function(DataFrame,PercentToSplit,SplitUsingSampleMethod=TRUE)
+{
+  # Will add index column
+  DataFrame$x <- seq(1,nrow(DataFrame))
+  
+  ## Number of rows to sample
+  smp_size <- floor(PercentToSplit * nrow(DataFrame))
+  
+  print(paste("Using training sample size of",smp_size,"using",PercentToSplit,"% split"))
+  print(paste("From total data set of",nrow(DataFrame),"rows"))
+  
+  if (SplitUsingSampleMethod == TRUE)
+  {
+    
+    print("Using sampling method to select training data")
+    
+    # Create sampling index
+    train_ind <- sample(DataFrame$x, size = smp_size)
+    
+    # Now split te data into training and test
+    train <- DataFrame[train_ind, ]
+    test <- DataFrame[-train_ind, ]
+    
+  } else {
+    
+    print("Using first n% to select training data")
+    
+    # Use the first percentage and test with the remaining
+    train <- DataFrame[1:smp_size,]
+    test <- DataFrame[(smp_size+1):nrow(DataFrame),]
+    
+  }
+  
+  # Check nrows of both
+  print(paste("Number of rows in training set ... ",nrow(train)))
+  print(paste("Number of rows in testing set ... ",nrow(test)))
+  
+  
+  # Now remove the x variable
+  train$x <- NULL
+  test$x <- NULL
+  
+  # Return list of data frames
+  ReturnList <- list(train,test)
+  
+  return(ReturnList)
+}
+
+# Function to pre-process the data
+PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,PercentageToSplit=0,UseSampleMethod=TRUE)
+{
+  if (Debug==TRUE) {print("PreProcessing data")}
+  
+  # Generic code
+  DataFrame <- DataFrame[,Columns]
+  colnames(DataFrame) <- ColumnNames
+  
+  # Split data
+  ListOfDataFrames <- SplitData(DataFrame,PercentToSplit=PercentageToSplit,SplitUsingSampleMethod=UseSampleMethod)
+  
+  return(ListOfDataFrames)
+}
+
+TrainingModelRF <- function(DataFrame,
+                            ColumnNames,
+                            PredictVariable="S",
+                            NTrees=5,
+                            Backtest=TRUE,
+                            Debug=TRUE,
+                            SaveModel=FALSE,
+                            PlotImportance=TRUE,
+                            FileName = "Model")
+{
+  if (Debug==TRUE) {print("Training on data using RF Model")}
+  
+  library(randomForest)
+  
+  PredictVariable <- DataFrame[,PredictVariable]
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  DataFrame <- cbind(VariableColumns,PredictVariable)
+  
+  #Print the fitting parameters
+  if (Debug==TRUE) {print(paste("    Number of trees = ",NTrees))}
+  
+  # Train
+  Model = randomForest(PredictVariable ~ . ,
+                       data = DataFrame,
+                       keep.forest=TRUE,
+                       importance=TRUE,
+                       ntree = NTrees)
+  
+  # Save model if required
+  if (SaveModel == TRUE) {
+    saveRDS(Model, paste(FileName,"_RF.rds",sep=""))
+    if (Debug==TRUE) {print(paste("    Saving to ",FileName,"_RF.rds",sep=""))}
+  }
+  
+  # Plot importance
+  if (PlotImportance == TRUE) {ImportancePlot(Model,"Example Importance Plot","Random Forest Model")}
+  
+  return(Model)
+  
+}
+
+PredictRF <- function(DataFrame,
+                      ColumnNames,
+                      Model,
+                      Backtest=TRUE,
+                      Debug=TRUE,
+                      LoadModel=FALSE,
+                      FileName="Model")
+{
+  if (Debug==TRUE) {print("Predicting from model and data using RF Model")}
+  
+  # Load Model required
+  if (LoadModel == TRUE) {
+    Model = readRDS(paste(FileName,"_RF.rds",sep=""))
+    if (Debug==TRUE) {print(paste("    Loaded from ",FileName,"_RF.rds",sep=""))}
+  }
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  DataFrame$Prediction <- predict(Model,VariableColumns)
+  
+  return(DataFrame)
+}
+
+TrainingModelRFRLT <- function(DataFrame,
+                               ColumnNames,
+                               PredictVariable="",
+                               NTrees=10,
+                               Backtest=TRUE,
+                               Debug=TRUE,
+                               SaveModel=FALSE,
+                               PlotImportance=TRUE,
+                               RegType="",
+                               FileName = "Model")
+{
+  if (Debug==TRUE) {print("Training on data using RFRLT model")}
+  
+  library(RLT)
+  
+  # Select Cols required
+  PredictVariable <- DataFrame[,PredictVariable]
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  # Run model
+  Model = RLT(VariableColumns, PredictVariable,
+              model = RegType, #  regression, classification or survival 
+              use.cores = 7,
+              ntrees = NTrees,
+              importance = TRUE, 
+              reinforcement = TRUE,
+              combsplit = 20,
+              embed.ntrees = NTrees)
+  
+  # Save model if required
+  if (SaveModel == TRUE) {
+    saveRDS(Model, paste(FileName,"_RF_RLT.rds",sep=""))
+    if (Debug==TRUE) {print(paste("    Saving to ",FileName,"_RF_RLT.rds",sep=""))}
+  }
+  
+  # Plot importance
+  if (PlotImportance == TRUE) {barplot(Model$VarImp)}
+  
+  return(Model)
+  
+}
+
+PredictRFRLT <- function(DataFrame,
+                         ColumnNames,
+                         Model,
+                         Backtest=TRUE,
+                         Debug=TRUE,
+                         LoadModel=TRUE,
+                         FileName="Model")
+{
+  if (Debug==TRUE) {print("Predicting from RF RLT model and data")}
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  # Load Model required
+  if (LoadModel == TRUE) {
+    Model = readRDS(paste(FileName,"_RF_RLT.rds",sep=""))
+    if (Debug==TRUE) {print(paste("    Loaded from ",FileName,"_RF_RLT.rds",sep=""))}
+  }
+  
+  PredictionList <- predict(Model,VariableColumns)
+  
+  DataFrame$Prediction <- PredictionList[[2]]   # Select only the predictions
+  
+  return(DataFrame)
+  
+}
+
+TrainingModelSVM <- function(DataFrame,
+                             ColumnNames,
+                             PredictVariable="",
+                             NTrees=10,
+                             Backtest=TRUE,
+                             Debug=TRUE,
+                             SaveModel=FALSE,
+                             PlotImportance=TRUE,
+                             FileName="Model")
+{
+  if (Debug==TRUE) {print("Training on data using Support Vector Machine")}
+  
+  library(e1071)
+  
+  # Select Cols required
+  PredictVariable <- DataFrame[,PredictVariable]
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  Model <- svm(VariableColumns, PredictVariable)
+  
+  if (PlotImportance==TRUE)
+  {
+    print(summary(Model))
+  }
+  
+  # Save model if required
+  if (SaveModel == TRUE) {
+    saveRDS(Model, paste(FileName,"_SVM.rds",sep=""))
+    if (Debug==TRUE) {print(paste("    Saving to ",FileName,"_SVM.rds",sep=""))}
+  }
+  
+  return(Model)
+  
+}
+
+
+PredictSVM <- function(DataFrame,ColumnNames,Model,
+                       Backtest=TRUE,
+                       Debug=TRUE,
+                       LoadModel=FALSE,
+                       FileName="Model")
+{
+  if (Debug==TRUE) {print("Predicting from data using Support Vector Machine model")}
+  
+  VariableColumns <- DataFrame[,ColumnNames]
+  
+  # Load Model required
+  if (LoadModel == TRUE) {
+    Model = readRDS(paste(FileName,"_SVM.rds",sep=""))
+    if (Debug==TRUE) {print(paste("    Loaded from ",FileName,"_SVM.rds",sep=""))}
+  }
+  
+  PredictionList <- predict(Model,VariableColumns)
+  
+  DataFrame$Prediction <- PredictionList   
+  
+  return(DataFrame)
+  
+}
+
+# Handles the testing of the accuracy of fit extra
+PostProcess <- function(DataFrame,PredictVariable="",Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel="",Variable="",RegType="",DrawCharts = FALSE)
+{
+  
+  if (TestingSet == FALSE)
+  {
+    Item <- "Training Set"
+    Title = paste("Training Data with",RegressionModel,"model predicting",Variable)
+    if (Debug==TRUE) {print(paste("Post processing training data after running",RegressionModel,"model predicting",Variable))}
+  } else {
+    Item <- "Test Set"
+    Title = paste("Testing Data with",RegressionModel,"model predicting",Variable)
+    if (Debug==TRUE) {print(paste("Post processing testing data after running",RegressionModel,"model predicting",Variable))}
+  }
+  
+  PredictVariable1 <- DataFrame[,PredictVariable]
+  DataFrame$Actual <- PredictVariable1
+  
+  # Handle x y type regression results
+  if (RegType =="regression")
+  {
+    # reformat data
+    DataFrame$Error <- DataFrame$Prediction - DataFrame$Actual
+    
+    # Calculate the RMSE and return it as part of the function
+    RMSE <- sqrt(sum(DataFrame$Error^2))
+    ReturnDataFrame <- data.frame(Desc=paste(Item,"RMS Error"),RMSE=RMSE)
+    print(ReturnDataFrame)
+    
+    if (DrawCharts == TRUE)
+    {
+      # Now plot the results
+      ResultsPlot <- ggplot(DataFrame,aes(x=Actual,y=Prediction)) +
+        geom_point(aes(x=Actual,y=Prediction),
+                   colour="Blue",
+                   fill="DarkBlue") +
+        geom_smooth(method="lm") +
+        xlab("Actual Value") +
+        ylab("Prediction") +
+        theme(plot.title = element_text(size = 12),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              text = element_text(size = 8)) +
+        ggtitle(paste("Actual versus Predicted - ",Title))
+      print(ResultsPlot)
+    }
+  }
+  
+  # Handle classification problems
+  if (RegType =="classification")
+  {
+    # Work out if not equal
+    DataFrame$Error <- ifelse(DataFrame$Prediction == PredictVariable, 1, 0)
+    print(DataFrame)
+    
+    # find errors
+    ErrorsFrame <- subset(DataFrame,DataFrame$Prediction != DataFrame$Actual)
+    print(paste("Number of rows predicted",nrow(DataFrame)))
+    print(paste("Number of errors found",nrow(ErrorsFrame)))
+    
+    ReturnDataFrame <- ErrorsFrame
+    
+  }
+  
+  return(ReturnDataFrame)
+}
+
+ImportancePlot <- function(Model,Title="",SubTitle="",Caption="")
+{
+  
+  library(ggplot2)
+  
+  MeanDecreaseGini <- importance(Model)
+  MeanDecreaseGini <- as.data.frame(MeanDecreaseGini)
+  MeanDecreaseGini$Variable <- rownames(MeanDecreaseGini)
+  
+  ImpPlot <- ggplot(data = MeanDecreaseGini, aes(Variable, IncNodePurity)) +
+    geom_bar(stat = "identity", position = "dodge",colour="red",alpha=0.8,fill="red") +
+    theme(axis.text.x = element_text(angle = 90, hjust = 1)) +
+    labs(caption = Caption) +
+    ggtitle(Title,
+            subtitle = paste(SubTitle)) 
+  print(ImpPlot)
+}
+
+
+###############################################################################
+#
+#   Data Analysis Code
+#
+#   Use this function to load your data and draw charts of your data 
+#
+###############################################################################
+
+MLDataAnalysis <- function()
+{
+  
+  # Load data
+  DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+  
+  if (nrow(DataFrame)>0) 
+  {
+    # Pre-Process
+    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
+                                   DisplayColumnNames,
+                                   Backtest=TRUE,
+                                   Debug=TRUE,
+                                   SplitPercent,
+                                   UseSampleMethod=SamplingMethod)
+    
+    # Check data formats after pre-processing
+    DataAnalysis(ListOfDataFrames[[1]],
+                 PredictionVariable,
+                 ProjectTitle,
+                 PrintExamples = PrintExamplesinAnalysis,
+                 DrawCharts = DrawChartsinAnalysis)
+  }
+}
+
+###############################################################################
+#
+#   Training Code
+#
+###############################################################################
+
+MLTraining <- function()
+{
+
+  # Load data
+  DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+  
+  if (nrow(DataFrame)>0) 
+  {
+    # Pre-Process
+    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
+                                   DisplayColumnNames,
+                                   Backtest=TRUE,
+                                   Debug=TRUE,SplitPercent,UseSampleMethod=SamplingMethod)
+    
+    # Check data formats after pre-processing
+    DataAnalysis(ListOfDataFrames[[1]],
+                 PredictionVariable,
+                 ProjectTitle,
+                 PrintExamples = PrintExamplesinAnalysis,
+                 DrawCharts = DrawChartsinAnalysis)
+    
+    if (RegressionModel == "SVM")
+    {
+      print("Training with Support Vector Machine")
+      
+      # Training
+      Model <-     TrainingModelSVM(ListOfDataFrames[[1]],
+                                    VariableNames,
+                                    PredictVariable=PredictionVariable,
+                                    NTrees=NumberOfTrees,
+                                    Backtest = TRUE,
+                                    Debug = TRUE,
+                                    SaveModel=TRUE,
+                                    PlotImportance=DrawImportanceCharts,
+                                    FileName = "Model")
+      
+      # Predict from training
+      TrainingPredictions <- PredictSVM(ListOfDataFrames[[1]],
+                                        VariableNames,
+                                        Model,
+                                        Backtest=TRUE,
+                                        Debug=TRUE,
+                                        LoadModel=TRUE,
+                                        FileName="Model")
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TrainingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=FALSE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+      
+      # Predict testing set
+      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],VariableNames,
+                                       Model,
+                                       Backtest=TRUE,
+                                       Debug=TRUE)
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+    if (RegressionModel == "RF")
+    {
+      
+      print("Training with Random Forrest - Original version")
+      
+      # Training
+      Model <-     TrainingModelRF(ListOfDataFrames[[1]],
+                                   VariableNames,
+                                   PredictVariable=PredictionVariable,
+                                   NTrees=NumberOfTrees,
+                                   SaveModel=TRUE,
+                                   PlotImportance=DrawImportanceCharts)
+      
+      # Predict from training
+      TrainingPredictions <- PredictRF(ListOfDataFrames[[1]],
+                                       VariableNames,
+                                       Model,
+                                       Backtest=TRUE,
+                                       Debug=TRUE,
+                                       LoadModel=TRUE)
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TrainingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=FALSE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+      # Predict testing set
+      TestingPredictions <- PredictRF(ListOfDataFrames[[2]],VariableNames,
+                                      Model,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      LoadModel=TRUE)
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+    if (RegressionModel == "RFRLT")
+    {
+      print("Training with Random Forrest - RLT version")
+      
+      # Training
+      Model <-     TrainingModelRFRLT(ListOfDataFrames[[1]],
+                                      VariableNames,
+                                      PredictVariable=PredictionVariable,
+                                      NTrees=NumberOfTrees,
+                                      SaveModel=TRUE,
+                                      PlotImportance=DrawImportanceCharts,
+                                      RegType=RegressionType,
+                                      FileName="Model")
+      
+      # Predict from training
+      TrainingPredictions <- PredictRFRLT(ListOfDataFrames[[1]],
+                                          VariableNames,
+                                          Model,
+                                          Backtest=TRUE,
+                                          Debug=TRUE,
+                                          LoadModel=TRUE,
+                                          FileName="Model")
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TrainingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=FALSE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+      # Predict testing set
+      TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],VariableNames,
+                                         Model,
+                                         Backtest=TRUE,
+                                         Debug=TRUE,
+                                         LoadModel=TRUE,
+                                         FileName="Model")
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+  } else {
+    print("No data found")
+  }
+
+}
+
+
+###############################################################################
+#
+#   Prediction Function
+#
+###############################################################################
+
+MLPrediction <- function()
+{
+  
+  # Load data
+  DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+  
+  if (nrow(DataFrame)>0) 
+  {
+    # Pre-Process
+    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
+                                   DisplayColumnNames,
+                                   Backtest=TRUE,
+                                   Debug=TRUE,
+                                   SplitPercent,
+                                   UseSampleMethod=SamplingMethod)
+    
+    if (RegressionModel == "SVM")
+    {
+      print("Prediction with Support Vector Machine")
+      
+      # Predict testing set
+      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],VariableNames,
+                                       Model,
+                                       Backtest=TRUE,
+                                       Debug=TRUE)
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,Variable = PredictionVariable,
+                                      RegType=RegressionType,DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+    if (RegressionModel == "RF")
+    {
+      
+      print("Prediction with Random Forrest - Original version")
+      
+      # Predict testing set
+      TestingPredictions <- PredictRF(ListOfDataFrames[[2]],VariableNames,
+                                      Model,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      LoadModel=TRUE,
+                                      FileName="Model")
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+    if (RegressionModel == "RFRLT")
+    {
+      
+      print("Prediction with Random Forrest - RLT version")
+      
+      # Predict testing set
+      TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],VariableNames,
+                                         Model,
+                                         Backtest=TRUE,
+                                         Debug=TRUE,
+                                         LoadModel=TRUE)
+      
+      # Do results processing
+      ResultsDataFrame <- PostProcess(TestingPredictions,
+                                      PredictVariable=PredictionVariable,
+                                      Backtest=TRUE,
+                                      Debug=TRUE,
+                                      TestingSet=TRUE,
+                                      RegressionModel=RegressionModel,
+                                      Variable = PredictionVariable,
+                                      RegType=RegressionType,
+                                      DrawCharts = DrawChartsOfResults)
+      
+    }
+    
+  } else {
+    print("No data found")
+  }
+  
+}
+
+# Call the training function
+MLTraining()
+
+MLDataAnalysis()
+
+MLPrediction()
