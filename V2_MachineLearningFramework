@@ -10,55 +10,78 @@
 #
 # By B. G. Bland 
 #
-set.seed(500) # Forces same random number to be produced
+set.seed(50) # Forces same random number to be produced
 
 # Example Framework code
 rm(list=ls())
 
-# This example uses the mtcars dataset which is provided in base R.
-# Use the following fields to change the behaviour
 
-#[, 1]	mpg	  -   Miles/(US) gallon
-#[, 2]	cyl	  -   Number of cylinders
-#[, 3]	disp	-   Displacement (cu.in.)
-#[, 4]	hp	  -   Gross horsepower
-#[, 5]	drat	-   Rear axle ratio
-#[, 6]	wt	  -   Weight (1000 lbs)
-#[, 7]	qsec	-   1/4 mile time
-#[, 8]	vs	  -   Engine (0 = V-shaped, 1 = straight)
-#[, 9]	am	  -   Transmission (0 = automatic, 1 = manual)
-#[,10]	gear	-   Number of forward gears
-#[,11]	carb	-   Number of carburetors
-
-# Edit these variables to control the columns to fit
-ProjectTitle <- "MTCARS Analysis"
-ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
-DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
-
-# Prediction variable
-PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
-VariableNames <- setdiff(DisplayColumnNames,PredictionVariable)
-SamplingMethod <- FALSE
-
-# Data Analysis Options
-PrintExamplesinAnalysis <- TRUE
-DrawChartsinAnalysis    <- TRUE
-DrawChartsOfResults     <- TRUE
-DrawImportanceCharts    <- TRUE
-
-# Regression Options
-RegressionModel <- "RF"            # Can be SVM , RF or RFRLT
-RegressionType  <- "regression"    # Use only regression or classification
-NumberOfTrees   <- 15
-SplitPercent    <- 80/100
-ConvertToFactors <- FALSE         # Must be false for SVM
-
-# Load ggplot library if charts are required
-if ((DrawChartsinAnalysis == TRUE) || (DrawChartsOfResults == TRUE) || (DrawImportanceCharts == TRUE))
+# Function to ensure no global variables are used within the Machine Learning Functions
+#
+# Define your own parameters here
+#
+SetParameters <- function()
 {
-  print("Loading GGPLOT2 Library")
-  library(ggplot2)
+  
+  MLParameterList = list()
+  MLParameterList$ProjectTitle = "MTCARS Analysis"
+  MLParameterList$ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
+  MLParameterList$DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
+  
+  # This example uses the mtcars dataset which is provided in base R.
+  # Use the following fields to change the behaviour
+  
+  #[, 1]	mpg	  -   Miles/(US) gallon
+  #[, 2]	cyl	  -   Number of cylinders
+  #[, 3]	disp	-   Displacement (cu.in.)
+  #[, 4]	hp	  -   Gross horsepower
+  #[, 5]	drat	-   Rear axle ratio
+  #[, 6]	wt	  -   Weight (1000 lbs)
+  #[, 7]	qsec	-   1/4 mile time
+  #[, 8]	vs	  -   Engine (0 = V-shaped, 1 = straight)
+  #[, 9]	am	  -   Transmission (0 = automatic, 1 = manual)
+  #[,10]	gear	-   Number of forward gears
+  #[,11]	carb	-   Number of carburetors
+
+  # Prediction variable
+  MLParameterList$PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
+  MLParameterList$VariableNames <- setdiff(MLParameterList$DisplayColumnNames,MLParameterList$PredictionVariable)
+  
+  # Load parameters
+  MLParameterList$BackTest         <- FALSE
+  MLParameterList$Debug            <- TRUE
+  MLParameterList$ConvertToFactors <- FALSE         # Must be false for SVM
+  
+  MLParameterList$SamplingMethod   <- FALSE
+  MLParameterList$SaveModelToFile  <- TRUE
+  MLParameterList$FileNameOfModel  <- "ML_Model"
+  
+  # Data Analysis Options
+  MLParameterList$PrintExamplesinAnalysis <- FALSE
+  MLParameterList$DrawChartsinAnalysis    <- FALSE
+  MLParameterList$DrawChartsOfResults     <- TRUE
+  MLParameterList$DrawImportanceCharts    <- TRUE
+  
+  # Regression Options
+  MLParameterList$RegressionModel <- "RFRLT"            # Can be SVM , RF or RFRLT
+  MLParameterList$RegressionType  <- "regression"    # Use only regression or classification
+  MLParameterList$NumberOfTrees   <- 20
+  MLParameterList$SplitPercent    <- 70/100
+  
+  
+  # Load ggplot library if charts are required
+  if ((MLParameterList$DrawChartsinAnalysis == TRUE) || (MLParameterList$DrawChartsOfResults == TRUE) || (MLParameterList$DrawImportanceCharts == TRUE))
+  {
+    print("Loading GGPLOT2 Library")
+    library(ggplot2)
+  }
+  
+  return(MLParameterList)
+
 }
+
+
+
 
 #####################################################################################
 #
@@ -226,7 +249,7 @@ PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,Pe
 
 TrainingModelRF <- function(DataFrame,
                             ColumnNames,
-                            PredictVariable="S",
+                            PredictVariable="",
                             NTrees=5,
                             Backtest=TRUE,
                             Debug=TRUE,
@@ -235,6 +258,9 @@ TrainingModelRF <- function(DataFrame,
                             FileName = "Model")
 {
   if (Debug==TRUE) {print("Training on data using RF Model")}
+  if (Debug==TRUE) {print(paste("Predicting ....",PredictVariable))}
+  if (Debug==TRUE) {print("Using Columns ....")}
+  if (Debug==TRUE) {print(ColumnNames)}
   
   library(randomForest)
   
@@ -302,6 +328,11 @@ TrainingModelRFRLT <- function(DataFrame,
                                FileName = "Model")
 {
   if (Debug==TRUE) {print("Training on data using RFRLT model")}
+  if (Debug==TRUE) {print(paste("Predicting ....",PredictVariable))}
+  if (Debug==TRUE) {print("Using Columns ....")}
+  if (Debug==TRUE) {print(ColumnNames)}
+  if (Debug==TRUE) {print(paste("Using No Tress ....",NTrees))}
+  if (Debug==TRUE) {print(paste("Using model ....",RegType))}
   
   library(RLT)
   
@@ -314,7 +345,7 @@ TrainingModelRFRLT <- function(DataFrame,
               model = RegType, #  regression, classification or survival 
               use.cores = 7,
               ntrees = NTrees,
-              importance = TRUE, 
+              importance = PlotImportance, 
               reinforcement = TRUE,
               combsplit = 20,
               embed.ntrees = NTrees)
@@ -361,14 +392,17 @@ PredictRFRLT <- function(DataFrame,
 TrainingModelSVM <- function(DataFrame,
                              ColumnNames,
                              PredictVariable="",
-                             NTrees=10,
                              Backtest=TRUE,
                              Debug=TRUE,
                              SaveModel=FALSE,
                              PlotImportance=TRUE,
                              FileName="Model")
 {
+  
   if (Debug==TRUE) {print("Training on data using Support Vector Machine")}
+  if (Debug==TRUE) {print(paste("Predicting ....",PredictVariable))}
+  if (Debug==TRUE) {print("Using Columns ....")}
+  if (Debug==TRUE) {print(ColumnNames)}
   
   library(e1071)
   
@@ -419,7 +453,15 @@ PredictSVM <- function(DataFrame,ColumnNames,Model,
 }
 
 # Handles the testing of the accuracy of fit extra
-PostProcess <- function(DataFrame,PredictVariable="",Backtest=TRUE,Debug=TRUE,TestingSet=FALSE,RegressionModel="",Variable="",RegType="",DrawCharts = FALSE)
+PostProcess <- function(DataFrame,
+                        PredictVariable="",
+                        Backtest=TRUE,
+                        Debug=TRUE,
+                        TestingSet=FALSE,
+                        RegressionModel="",
+                        Variable="",
+                        RegType="",
+                        DrawCharts = FALSE)
 {
   
   if (TestingSet == FALSE)
@@ -512,28 +554,32 @@ ImportancePlot <- function(Model,Title="",SubTitle="",Caption="")
 #
 ###############################################################################
 
-MLDataAnalysis <- function()
+MLDataAnalysis <- function(MLParameterList)
 {
   
   # Load data
-  DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+  DataFrame <- DataLoadAndFormat(Backtest=MLParameterList$BackTest,
+                                 Debug=MLParameterList$Debug,
+                                 ConvertToFactors=MLParameterList$ConvertToFactors)
   
   if (nrow(DataFrame)>0) 
   {
     # Pre-Process
-    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
-                                   DisplayColumnNames,
-                                   Backtest=TRUE,
-                                   Debug=TRUE,
-                                   SplitPercent,
-                                   UseSampleMethod=SamplingMethod)
+    ListOfDataFrames <- PreProcess(DataFrame,
+                                   Columns = MLParameterList$ColumnsToSelectForTraining,
+                                   ColumnNames = MLParameterList$DisplayColumnNames,
+                                   Backtest = MLParameterList$BackTest,
+                                   Debug = MLParameterList$Debug,
+                                   PercentageToSplit = MLParameterList$SplitPercent,
+                                   UseSampleMethod = MLParameterList$SamplingMethod)
     
     # Check data formats after pre-processing
     DataAnalysis(ListOfDataFrames[[1]],
-                 PredictionVariable,
-                 ProjectTitle,
-                 PrintExamples = PrintExamplesinAnalysis,
-                 DrawCharts = DrawChartsinAnalysis)
+                 PredictionVariable  = MLParameterList$PredictionVariable,
+                 Title               = MLParameterList$ProjectTitle,
+                 PrintExamples       = MLParameterList$PrintExamplesinAnalysis,
+                 DrawCharts          = MLParameterList$DrawChartsinAnalysis)
+    
   }
 }
 
@@ -543,186 +589,202 @@ MLDataAnalysis <- function()
 #
 ###############################################################################
 
-MLTraining <- function()
+MLTraining <- function(MLParameterList)
 {
 
   # Load data
-  DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+  DataFrame <- DataLoadAndFormat(Backtest=MLParameterList$BackTest,
+                                 Debug=MLParameterList$Debug,
+                                 ConvertToFactors=MLParameterList$ConvertToFactors)
   
   if (nrow(DataFrame)>0) 
   {
     # Pre-Process
-    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
-                                   DisplayColumnNames,
-                                   Backtest=TRUE,
-                                   Debug=TRUE,SplitPercent,UseSampleMethod=SamplingMethod)
+    ListOfDataFrames <- PreProcess(DataFrame,
+                                   Columns = MLParameterList$ColumnsToSelectForTraining,
+                                   ColumnNames = MLParameterList$DisplayColumnNames,
+                                   Backtest = MLParameterList$BackTest,
+                                   Debug = MLParameterList$Debug,
+                                   PercentageToSplit = MLParameterList$SplitPercent,
+                                   UseSampleMethod = MLParameterList$SamplingMethod)
     
     # Check data formats after pre-processing
     DataAnalysis(ListOfDataFrames[[1]],
-                 PredictionVariable,
-                 ProjectTitle,
-                 PrintExamples = PrintExamplesinAnalysis,
-                 DrawCharts = DrawChartsinAnalysis)
+                 PredictionVariable  = MLParameterList$PredictionVariable,
+                 Title               = MLParameterList$ProjectTitle,
+                 PrintExamples       = MLParameterList$PrintExamplesinAnalysis,
+                 DrawCharts          = MLParameterList$DrawChartsinAnalysis)
     
-    if (RegressionModel == "SVM")
+    if (MLParameterList$RegressionModel == "SVM")
     {
       print("Training with Support Vector Machine")
       
       # Training
       Model <-     TrainingModelSVM(ListOfDataFrames[[1]],
-                                    VariableNames,
-                                    PredictVariable=PredictionVariable,
-                                    NTrees=NumberOfTrees,
-                                    Backtest = TRUE,
-                                    Debug = TRUE,
-                                    SaveModel=TRUE,
-                                    PlotImportance=DrawImportanceCharts,
-                                    FileName = "Model")
+                                    ColumnNames     = MLParameterList$VariableNames,
+                                    PredictVariable = MLParameterList$PredictionVariable,
+                                    Backtest        = MLParameterList$BackTest,
+                                    Debug           = MLParameterList$Debug,
+                                    SaveModel       = MLParameterList$SaveModelToFile,
+                                    PlotImportance  = MLParameterList$DrawImportanceCharts,
+                                    FileName        = MLParameterList$FileNameOfModel)
       
       # Predict from training
       TrainingPredictions <- PredictSVM(ListOfDataFrames[[1]],
-                                        VariableNames,
-                                        Model,
-                                        Backtest=TRUE,
-                                        Debug=TRUE,
-                                        LoadModel=TRUE,
-                                        FileName="Model")
+                                    ColumnNames = MLParameterList$VariableNames,
+                                    Model       = Model,
+                                    Backtest    = MLParameterList$BackTest,
+                                    Debug       = MLParameterList$Debug,
+                                    LoadModel   = MLParameterList$SaveModelToFile,
+                                    FileName    = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TrainingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=FALSE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                    PredictVariable     = MLParameterList$PredictionVariable,
+                                    Backtest            = MLParameterList$BackTest,
+                                    Debug               = MLParameterList$Debug,
+                                    TestingSet          = FALSE,
+                                    RegressionModel     = MLParameterList$RegressionModel,
+                                    Variable            = MLParameterList$PredictionVariable,
+                                    RegType             = MLParameterList$RegressionType,
+                                    DrawCharts          = MLParameterList$DrawChartsOfResults)
       
       
       # Predict testing set
-      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],VariableNames,
-                                       Model,
-                                       Backtest=TRUE,
-                                       Debug=TRUE)
+      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],
+                                     ColumnNames = MLParameterList$VariableNames,
+                                     Model       = Model,
+                                     Backtest    = MLParameterList$BackTest,
+                                     Debug       = MLParameterList$Debug,
+                                     LoadModel   = MLParameterList$SaveModelToFile,
+                                     FileName    = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=TRUE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                    PredictVariable     = MLParameterList$PredictionVariable,
+                                    Backtest            = MLParameterList$BackTest,
+                                    Debug               = MLParameterList$Debug,
+                                    TestingSet          = TRUE,
+                                    RegressionModel     = MLParameterList$RegressionModel,
+                                    Variable            = MLParameterList$PredictionVariable,
+                                    RegType             = MLParameterList$RegressionType,
+                                    DrawCharts          = MLParameterList$DrawChartsOfResults)
       
     }
     
-    if (RegressionModel == "RF")
+    if (MLParameterList$RegressionModel == "RF")
     {
       
       print("Training with Random Forrest - Original version")
       
       # Training
       Model <-     TrainingModelRF(ListOfDataFrames[[1]],
-                                   VariableNames,
-                                   PredictVariable=PredictionVariable,
-                                   NTrees=NumberOfTrees,
-                                   SaveModel=TRUE,
-                                   PlotImportance=DrawImportanceCharts)
-      
+                                   ColumnNames            = MLParameterList$VariableNames,
+                                   PredictVariable        = MLParameterList$PredictionVariable,
+                                   NTrees                 = MLParameterList$NumberOfTrees,
+                                   Backtest               = MLParameterList$BackTest,
+                                   Debug                  = MLParameterList$Debug,
+                                   SaveModel              = MLParameterList$SaveModelToFile,
+                                   PlotImportance         = MLParameterList$DrawImportanceCharts,
+                                   FileName               = MLParameterList$FileNameOfModel)
+  
+        
       # Predict from training
       TrainingPredictions <- PredictRF(ListOfDataFrames[[1]],
-                                       VariableNames,
-                                       Model,
-                                       Backtest=TRUE,
-                                       Debug=TRUE,
-                                       LoadModel=TRUE)
+                                   ColumnNames            = MLParameterList$VariableNames,
+                                   Model                  = Model,
+                                   Backtest               = MLParameterList$BackTest,
+                                   Debug                  = MLParameterList$Debug,
+                                   LoadModel              = MLParameterList$SaveModelToFile,
+                                   FileName               = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TrainingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=FALSE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                  PredictVariable     = MLParameterList$PredictionVariable,
+                                  Backtest            = MLParameterList$BackTest,
+                                  Debug               = MLParameterList$Debug,
+                                  TestingSet          = FALSE,
+                                  RegressionModel     = MLParameterList$RegressionModel,
+                                  Variable            = MLParameterList$PredictionVariable,
+                                  RegType             = MLParameterList$RegressionType,
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
       
       # Predict testing set
-      TestingPredictions <- PredictRF(ListOfDataFrames[[2]],VariableNames,
-                                      Model,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      LoadModel=TRUE)
+      TestingPredictions <- PredictRF(ListOfDataFrames[[2]],
+                                  ColumnNames            = MLParameterList$VariableNames,
+                                  Model                  = Model,
+                                  Backtest               = MLParameterList$BackTest,
+                                  Debug                  = MLParameterList$Debug,
+                                  LoadModel              = MLParameterList$SaveModelToFile,
+                                  FileName               = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=TRUE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                  PredictVariable     = MLParameterList$PredictionVariable,
+                                  Backtest            = MLParameterList$BackTest,
+                                  Debug               = MLParameterList$Debug,
+                                  TestingSet          = TRUE,
+                                  RegressionModel     = MLParameterList$RegressionModel,
+                                  Variable            = MLParameterList$PredictionVariable,
+                                  RegType             = MLParameterList$RegressionType,
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
       
     }
     
-    if (RegressionModel == "RFRLT")
+    if (MLParameterList$RegressionModel == "RFRLT")
     {
       print("Training with Random Forrest - RLT version")
       
       # Training
       Model <-     TrainingModelRFRLT(ListOfDataFrames[[1]],
-                                      VariableNames,
-                                      PredictVariable=PredictionVariable,
-                                      NTrees=NumberOfTrees,
-                                      SaveModel=TRUE,
-                                      PlotImportance=DrawImportanceCharts,
-                                      RegType=RegressionType,
-                                      FileName="Model")
+                                  ColumnNames       = MLParameterList$VariableNames,
+                                  PredictVariable   = MLParameterList$PredictionVariable,
+                                  NTrees            = MLParameterList$NumberOfTrees,
+                                  SaveModel         = MLParameterList$SaveModelToFile,
+                                  PlotImportance    = MLParameterList$DrawImportanceCharts,
+                                  RegType           = MLParameterList$RegressionType,
+                                  FileName          = MLParameterList$FileNameOfModel)
       
+        
       # Predict from training
       TrainingPredictions <- PredictRFRLT(ListOfDataFrames[[1]],
-                                          VariableNames,
-                                          Model,
-                                          Backtest=TRUE,
-                                          Debug=TRUE,
-                                          LoadModel=TRUE,
-                                          FileName="Model")
+                                  ColumnNames       = MLParameterList$VariableNames,
+                                  Model             = Model,
+                                  Backtest          = MLParameterList$BackTest,
+                                  Debug             = MLParameterList$Debug,
+                                  LoadModel         = MLParameterList$SaveModelToFile,
+                                  FileName          = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TrainingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=FALSE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                  PredictVariable     = MLParameterList$PredictionVariable,
+                                  Backtest            = MLParameterList$BackTest,
+                                  Debug               = MLParameterList$Debug,
+                                  TestingSet          = FALSE,
+                                  RegressionModel     = MLParameterList$RegressionModel,
+                                  Variable            = MLParameterList$PredictionVariable,
+                                  RegType             = MLParameterList$RegressionType,
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
       
       # Predict testing set
-      TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],VariableNames,
-                                         Model,
-                                         Backtest=TRUE,
-                                         Debug=TRUE,
-                                         LoadModel=TRUE,
-                                         FileName="Model")
+      TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],
+                                   ColumnNames       = MLParameterList$VariableNames,
+                                   Model             = Model,
+                                   Backtest          = MLParameterList$BackTest,
+                                   Debug             = MLParameterList$Debug,
+                                   LoadModel         = MLParameterList$SaveModelToFile,
+                                   FileName          = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=TRUE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                  PredictVariable     = MLParameterList$PredictionVariable,
+                                  Backtest            = MLParameterList$BackTest,
+                                  Debug               = MLParameterList$Debug,
+                                  TestingSet          = TRUE,
+                                  RegressionModel     = MLParameterList$RegressionModel,
+                                  Variable            = MLParameterList$PredictionVariable,
+                                  RegType             = MLParameterList$RegressionType,
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
       
     }
     
@@ -739,88 +801,103 @@ MLTraining <- function()
 #
 ###############################################################################
 
-MLPrediction <- function()
+MLPrediction <- function(MLParameterList)
 {
   
   # Load data
-  DataFrame <- DataLoadAndFormat(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+  DataFrame <- DataLoadAndFormat(Backtest   =  MLParameterList$BackTest,
+                                 Debug      =  MLParameterList$Debug,
+                                 ConvertToFactors = MLParameterList$ConvertToFactors)
   
   if (nrow(DataFrame)>0) 
   {
-    # Pre-Process
-    ListOfDataFrames <- PreProcess(DataFrame,ColumnsToSelectForTraining,
-                                   DisplayColumnNames,
-                                   Backtest=TRUE,
-                                   Debug=TRUE,
-                                   SplitPercent,
-                                   UseSampleMethod=SamplingMethod)
     
-    if (RegressionModel == "SVM")
+    # Pre-Process
+    ListOfDataFrames <- PreProcess(DataFrame,
+                                   Columns = MLParameterList$ColumnsToSelectForTraining,
+                                   ColumnNames = MLParameterList$DisplayColumnNames,
+                                   Backtest = FALSE,
+                                   Debug = FALSE,
+                                   PercentageToSplit = MLParameterList$SplitPercent,
+                                   UseSampleMethod = MLParameterList$SamplingMethod)
+    
+    if (MLParameterList$RegressionModel == "SVM")
     {
       print("Prediction with Support Vector Machine")
       
       # Predict testing set
-      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],VariableNames,
-                                       Model,
-                                       Backtest=TRUE,
-                                       Debug=TRUE)
+      TestingPredictions <- PredictSVM(ListOfDataFrames[[2]],
+                                       ColumnNames = MLParameterList$VariableNames,
+                                       Model       = Model,
+                                       Backtest    = FALSE,
+                                       Debug       = FALSE,
+                                       LoadModel   = TRUE,
+                                       FileName    = MLParameterList$FileNameOfModel)
       
       # Do results processing
-      ResultsDataFrame <- PostProcess(TestingPredictions,PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,Debug=TRUE,TestingSet=TRUE,
-                                      RegressionModel=RegressionModel,Variable = PredictionVariable,
-                                      RegType=RegressionType,DrawCharts = DrawChartsOfResults)
+      ResultsDataFrame <- PostProcess(TestingPredictions,
+                                      PredictVariable     = MLParameterList$PredictionVariable,
+                                      Backtest            = FALSE,
+                                      Debug               = FALSE,
+                                      TestingSet          = TRUE,
+                                      RegressionModel     = MLParameterList$RegressionModel,
+                                      Variable            = MLParameterList$PredictionVariable,
+                                      RegType             = MLParameterList$RegressionType,
+                                      DrawCharts          = MLParameterList$DrawChartsOfResults)
       
     }
     
-    if (RegressionModel == "RF")
+    if (MLParameterList$RegressionModel == "RF")
     {
       
       print("Prediction with Random Forrest - Original version")
       
       # Predict testing set
-      TestingPredictions <- PredictRF(ListOfDataFrames[[2]],VariableNames,
-                                      Model,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      LoadModel=TRUE,
-                                      FileName="Model")
+      TestingPredictions <- PredictRF(ListOfDataFrames[[2]],
+                                      ColumnNames            = MLParameterList$VariableNames,
+                                      Model                  = Model,
+                                      Backtest               = FALSE,
+                                      Debug                  = FALSE,
+                                      LoadModel              = TRUE,
+                                      FileName               = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=TRUE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                      PredictVariable     = MLParameterList$PredictionVariable,
+                                      Backtest            = FALSE,
+                                      Debug               = FALSE,
+                                      TestingSet          = TRUE,
+                                      RegressionModel     = MLParameterList$RegressionModel,
+                                      Variable            = MLParameterList$PredictionVariable,
+                                      RegType             = MLParameterList$RegressionType,
+                                      DrawCharts          = MLParameterList$DrawChartsOfResults)
       
     }
     
-    if (RegressionModel == "RFRLT")
+    if (MLParameterList$RegressionModel == "RFRLT")
     {
       
       print("Prediction with Random Forrest - RLT version")
       
       # Predict testing set
-      TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],VariableNames,
-                                         Model,
-                                         Backtest=TRUE,
-                                         Debug=TRUE,
-                                         LoadModel=TRUE)
+      TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],
+                                         ColumnNames       = MLParameterList$VariableNames,
+                                         Model             = Model,
+                                         Backtest          = FALSE,
+                                         Debug             = FALSE,
+                                         LoadModel         = TRUE,
+                                         FileName          = MLParameterList$FileNameOfModel)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
-                                      PredictVariable=PredictionVariable,
-                                      Backtest=TRUE,
-                                      Debug=TRUE,
-                                      TestingSet=TRUE,
-                                      RegressionModel=RegressionModel,
-                                      Variable = PredictionVariable,
-                                      RegType=RegressionType,
-                                      DrawCharts = DrawChartsOfResults)
+                                      PredictVariable     = MLParameterList$PredictionVariable,
+                                      Backtest            = FALSE,
+                                      Debug               = FALSE,
+                                      TestingSet          = TRUE,
+                                      RegressionModel     = MLParameterList$RegressionModel,
+                                      Variable            = MLParameterList$PredictionVariable,
+                                      RegType             = MLParameterList$RegressionType,
+                                      DrawCharts          = MLParameterList$DrawChartsOfResults)
       
     }
     
@@ -830,9 +907,12 @@ MLPrediction <- function()
   
 }
 
+
+MLParameterList <- SetParameters()
+
 # Call the training function
-MLTraining()
+MLTraining(MLParameterList)
 
-MLDataAnalysis()
+#MLDataAnalysis(MLParameterList)
 
-MLPrediction()
+#MLPrediction(MLParameterList)
