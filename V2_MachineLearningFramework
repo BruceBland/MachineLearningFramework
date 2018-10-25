@@ -23,11 +23,6 @@ rm(list=ls())
 SetParameters <- function()
 {
   
-  MLParameterList = list()
-  MLParameterList$ProjectTitle = "MTCARS Analysis"
-  MLParameterList$ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
-  MLParameterList$DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
-  
   # This example uses the mtcars dataset which is provided in base R.
   # Use the following fields to change the behaviour
   
@@ -42,15 +37,31 @@ SetParameters <- function()
   #[, 9]	am	  -   Transmission (0 = automatic, 1 = manual)
   #[,10]	gear	-   Number of forward gears
   #[,11]	carb	-   Number of carburetors
+  
+  # ML Params
+  MLParameterList = list()
+  
+  MLParameterList$ProjectTitle = "MTCARS Analysis"
+  MLParameterList$ColumnsToSelectForTraining <- c("carb","cyl","disp","hp","gear","wt","vs","am") # Reduce data set from original
+  MLParameterList$DisplayColumnNames <- c("Carburetors","Cylinders","Displacement","HorsePower","Gears","Weight","StraightEngine","ManualTransmission")    # Rename the columns
+  
+  MLParameterList$ConvertToFactors <- FALSE           # Must be false for SVM
+  
+  # Data Pre processing option
+  MLParameterList$OneHotEncodeFactors <- TRUE         # Use for neural networks
+  
+  MLParameterList$Rescale <- TRUE                     # Rescale all the values (must be one hot encoded)
+  MLParameterList$Maximums <- c(4,8,500,500,6,10,1,1) # Max values for each variable
+  MLParameterList$Minimums <- c(1,1,1,1,1,1,0,0)       # Min value for each variable
 
   # Prediction variable
-  MLParameterList$PredictionVariable <- "HorsePower"                                          # y^ the prediction variable
+  MLParameterList$PredictionVariable <- "Weight"                                          # y^ the prediction variable
   MLParameterList$VariableNames <- setdiff(MLParameterList$DisplayColumnNames,MLParameterList$PredictionVariable)
   
   # Load parameters
   MLParameterList$BackTest         <- FALSE
   MLParameterList$Debug            <- TRUE
-  MLParameterList$ConvertToFactors <- FALSE         # Must be false for SVM
+  
   
   MLParameterList$SamplingMethod   <- FALSE
   MLParameterList$SaveModelToFile  <- TRUE
@@ -58,15 +69,17 @@ SetParameters <- function()
   
   # Data Analysis Options
   MLParameterList$PrintExamplesinAnalysis <- FALSE
-  MLParameterList$DrawChartsinAnalysis    <- FALSE
+  MLParameterList$DrawChartsinAnalysis    <- TRUE
   MLParameterList$DrawChartsOfResults     <- TRUE
   MLParameterList$DrawImportanceCharts    <- TRUE
   
+  
+  
   # Regression Options
-  MLParameterList$RegressionModel <- "RFRLT"            # Can be SVM , RF or RFRLT
+  MLParameterList$RegressionModel <- "RF"            # Can be SVM , RF or RFRLT
   MLParameterList$RegressionType  <- "regression"    # Use only regression or classification
-  MLParameterList$NumberOfTrees   <- 20
-  MLParameterList$SplitPercent    <- 70/100
+  MLParameterList$NumberOfTrees   <- 100
+  MLParameterList$SplitPercent    <- 80/100
   
   
   # Load ggplot library if charts are required
@@ -115,9 +128,25 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
   
 }
 
+DataFrameMaxAndMins <- function(DataFrame)
+{
+  
+  # Compute the max and mins for each column in the data frame
+  Columns <- colnames(DataFrame)
+  maxs <- apply(DataFrame, 2, max) 
+  mins <- apply(DataFrame, 2, min)
+  
+  return(list(ColumnNames=Columns,Maximums=maxs,Minimums=mins))
+  
+}
 
 ## Quick summary of data we are using to compute the column type and number of levels
-DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExamples = TRUE,DrawCharts = TRUE)
+DataAnalysis <- function(DataFrame,
+                         PredictionVariable="",
+                         Title = "",
+                         PrintExamples = TRUE,
+                         DrawCharts = TRUE,
+                         BeforePreProcessing = TRUE)
 {
   
   print("Data Analysis of DataFrame")
@@ -143,6 +172,7 @@ DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExample
         # Now print the top 5 unique values in the column
         for (i in head(unique(DataFrame[,ColNo]),5)){print(paste("        ",col,"=",i))}
       }
+      
       # Now print summary if not a factor
       if (class(DataFrame[,ColNo])!= "factor") {
         print(paste("    Min",min(DataFrame[,ColNo]),
@@ -163,25 +193,49 @@ DataAnalysis <- function(DataFrame,PredictionVariable="",Title = "",PrintExample
           ActualCol <- DataFrame[,ColNo]
           PlotDF <- data.frame(Prediction = PredictionCol, Actual = ActualCol)
           
-          ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
-            geom_point(aes(x=Actual,y=Prediction),
-                       colour="Blue",
-                       fill="DarkBlue",
-                       size=0.5) +
-            geom_smooth(method="lm") +
-            ylab(paste(PredictionVariable,"- Predict Column")) +
-            xlab(paste(col,"- Example Column")) +
-            theme(plot.title = element_text(size = 12),
-                  axis.title.x = element_text(size = 10),
-                  axis.title.y = element_text(size = 10),
-                  text = element_text(size = 8)) +
-            ggtitle(paste(Title,"-",PredictionVariable,"versus",col))
-          print(ResultsPlot)
-        }
+          if (BeforePreProcessing == FALSE)
+          {
+            ResultsPlot <- ggplot(PlotDF,aes(x=Actual,y=Prediction)) +
+              geom_point(aes(x=Actual,y=Prediction),
+                         colour="Blue",
+                         fill="DarkBlue",
+                         size=0.5) +
+              geom_smooth(method="lm") +
+              ylab(paste(PredictionVariable,"- Predict Column")) +
+              xlab(paste(col,"- Example Column")) +
+              theme(plot.title = element_text(size = 12),
+                    axis.title.x = element_text(size = 10),
+                    axis.title.y = element_text(size = 10),
+                    text = element_text(size = 8)) +
+              ggtitle(paste(Title,"-",PredictionVariable,"versus",col))
+            print(ResultsPlot)
+          }
+      }
+        
+      if (BeforePreProcessing == TRUE)
+      {
+        # Now plot the histograms
+        ResultsPlot <- ggplot(PlotDF,aes(x=Actual)) +
+          geom_histogram(aes(x=Actual),
+                     colour="Blue",
+                     fill="DarkBlue",
+                     size=0.5) +
+          ylab(paste("Count")) +
+          xlab(paste(col,"- Example Column")) +
+          theme(plot.title = element_text(size = 12),
+                axis.title.x = element_text(size = 10),
+                axis.title.y = element_text(size = 10),
+                text = element_text(size = 8)) +
+          ggtitle(paste(Title,"-","Histogram",col))
+        print(ResultsPlot)
+      } 
       }
     }
+    
   }
 }
+
+
 
 # Split function
 SplitData <- function(DataFrame,PercentToSplit,SplitUsingSampleMethod=TRUE)
@@ -232,17 +286,71 @@ SplitData <- function(DataFrame,PercentToSplit,SplitUsingSampleMethod=TRUE)
   return(ReturnList)
 }
 
-# Function to pre-process the data
-PreProcess <- function(DataFrame,Columns,ColumnNames,Backtest=TRUE,Debug=TRUE,PercentageToSplit=0,UseSampleMethod=TRUE)
+# Function to pre-process the data - First selects columns, then rescales, then splits
+PreProcess <- function(DataFrame,
+                       Columns = "",
+                       ColumnNames = "",
+                       Backtest=TRUE,
+                       Debug=TRUE,
+                       PercentageToSplit=0,
+                       UseSampleMethod=TRUE,
+                       OneHotEncodeFactors=FALSE,
+                       Rescale=FALSE,
+                       MaxValues="",
+                       MinValues="")
 {
+  
+  
   if (Debug==TRUE) {print("PreProcessing data")}
   
   # Generic code
   DataFrame <- DataFrame[,Columns]
   colnames(DataFrame) <- ColumnNames
   
+
+  # Rescale all data using provided max and mins
+  if (Rescale == TRUE)
+  {
+    if (Debug==TRUE) {print("    Rescaling data now")}
+    
+    i <- 0
+    for (Column in colnames(DataFrame))
+    {
+      i <- i + 1
+      DataColumn <- DataFrame[,Column]
+      if (is.factor(DataColumn) == FALSE)
+      {
+        print(paste("     ",Column,"is not a factor"))
+        Max <- MaxValues[i]
+        Min <- MinValues[i]
+        print(paste("     ",Column,"has max",Max,"and min",Min))
+        DataFrame[,Column] <- scale(DataColumn,center = Min,scale = Max - Min)
+        
+      }
+    }
+    
+  }
+  
+  # One hot encode all factors now
+  if (OneHotEncodeFactors == TRUE)
+  {
+    if (Debug==TRUE) {print("    One hot encoding data now")}
+    
+    # First refactor all the factor columns
+    DataFrame <- as.data.frame(lapply(DataFrame, function (x) if (is.factor(x)) factor(x) else x)) 
+    
+    # One hot encode all the data in the data frame
+    DataFrame = as.data.frame(model.matrix(~.-1,DataFrame))    # Convert to matrix
+    
+    # Remove spaces from the column names and replace with little x
+    names(DataFrame) <-gsub(" ","x", names(DataFrame))
+    
+  }
+  
+  
   # Split data
   ListOfDataFrames <- SplitData(DataFrame,PercentToSplit=PercentageToSplit,SplitUsingSampleMethod=UseSampleMethod)
+  
   
   return(ListOfDataFrames)
 }
@@ -264,9 +372,10 @@ TrainingModelRF <- function(DataFrame,
   
   library(randomForest)
   
+  # Select Cols required
+  VariableNames <- setdiff(colnames(DataFrame),PredictVariable)
   PredictVariable <- DataFrame[,PredictVariable]
-  
-  VariableColumns <- DataFrame[,ColumnNames]
+  VariableColumns <- DataFrame[,VariableNames]
   
   DataFrame <- cbind(VariableColumns,PredictVariable)
   
@@ -299,7 +408,8 @@ PredictRF <- function(DataFrame,
                       Backtest=TRUE,
                       Debug=TRUE,
                       LoadModel=FALSE,
-                      FileName="Model")
+                      FileName="Model",
+                      PredictVariable="")
 {
   if (Debug==TRUE) {print("Predicting from model and data using RF Model")}
   
@@ -309,7 +419,9 @@ PredictRF <- function(DataFrame,
     if (Debug==TRUE) {print(paste("    Loaded from ",FileName,"_RF.rds",sep=""))}
   }
   
-  VariableColumns <- DataFrame[,ColumnNames]
+  #VariableColumns <- DataFrame[,ColumnNames]
+  VariableNames <- setdiff(colnames(DataFrame),PredictVariable)
+  VariableColumns <- DataFrame[,VariableNames]
   
   DataFrame$Prediction <- predict(Model,VariableColumns)
   
@@ -337,8 +449,9 @@ TrainingModelRFRLT <- function(DataFrame,
   library(RLT)
   
   # Select Cols required
+  VariableNames <- setdiff(colnames(DataFrame),PredictVariable)
   PredictVariable <- DataFrame[,PredictVariable]
-  VariableColumns <- DataFrame[,ColumnNames]
+  VariableColumns <- DataFrame[,VariableNames]
   
   # Run model
   Model = RLT(VariableColumns, PredictVariable,
@@ -369,11 +482,14 @@ PredictRFRLT <- function(DataFrame,
                          Backtest=TRUE,
                          Debug=TRUE,
                          LoadModel=TRUE,
-                         FileName="Model")
+                         FileName="Model",
+                         PredictVariable="")
 {
   if (Debug==TRUE) {print("Predicting from RF RLT model and data")}
   
-  VariableColumns <- DataFrame[,ColumnNames]
+  #VariableColumns <- DataFrame[,ColumnNames]
+  VariableNames <- setdiff(colnames(DataFrame),PredictVariable)
+  VariableColumns <- DataFrame[,VariableNames]
   
   # Load Model required
   if (LoadModel == TRUE) {
@@ -407,10 +523,11 @@ TrainingModelSVM <- function(DataFrame,
   library(e1071)
   
   # Select Cols required
+  VariableNames <- setdiff(colnames(DataFrame),PredictVariable)
   PredictVariable <- DataFrame[,PredictVariable]
-  VariableColumns <- DataFrame[,ColumnNames]
+  VariableColumns <- DataFrame[,VariableNames]
   
-  Model <- svm(VariableColumns, PredictVariable)
+  Model <- svm(VariableColumns, PredictVariable,kernel = "linear")
   
   if (PlotImportance==TRUE)
   {
@@ -432,11 +549,14 @@ PredictSVM <- function(DataFrame,ColumnNames,Model,
                        Backtest=TRUE,
                        Debug=TRUE,
                        LoadModel=FALSE,
-                       FileName="Model")
+                       FileName="Model",
+                       PredictVariable="")
 {
   if (Debug==TRUE) {print("Predicting from data using Support Vector Machine model")}
   
-  VariableColumns <- DataFrame[,ColumnNames]
+  #VariableColumns <- DataFrame[,ColumnNames]
+  VariableNames <- setdiff(colnames(DataFrame),PredictVariable)
+  VariableColumns <- DataFrame[,VariableNames]
   
   # Load Model required
   if (LoadModel == TRUE) {
@@ -452,7 +572,7 @@ PredictSVM <- function(DataFrame,ColumnNames,Model,
   
 }
 
-# Handles the testing of the accuracy of fit extra
+# Rescales and Handles the testing of the accuracy of fit
 PostProcess <- function(DataFrame,
                         PredictVariable="",
                         Backtest=TRUE,
@@ -461,7 +581,11 @@ PostProcess <- function(DataFrame,
                         RegressionModel="",
                         Variable="",
                         RegType="",
-                        DrawCharts = FALSE)
+                        DrawCharts = FALSE,
+                        Rescale=FALSE,
+                        MaxValues="",
+                        MinValues="",
+                        ColumnNames="")
 {
   
   if (TestingSet == FALSE)
@@ -475,8 +599,21 @@ PostProcess <- function(DataFrame,
     if (Debug==TRUE) {print(paste("Post processing testing data after running",RegressionModel,"model predicting",Variable))}
   }
   
-  PredictVariable1 <- DataFrame[,PredictVariable]
-  DataFrame$Actual <- PredictVariable1
+  # Extract the predicted variable
+  DataFrame$Actual <- DataFrame[,PredictVariable]
+  
+  # Now rescale the predicted variable if it was not a factor
+  if (Rescale==TRUE)
+  {
+    if (Debug==TRUE) {print(paste("Rescaling prediction variable",PredictVariable))}
+    
+    # Find the prediction parameter in the columns list
+    PredictCol <- which(ColumnNames==PredictVariable)
+    
+    # rescale now
+    DataFrame$Prediction <- DataFrame$Prediction * (MaxValues[PredictCol] - MinValues[PredictCol]) + MinValues[PredictCol]
+    DataFrame$Actual <- DataFrame$Actual * (MaxValues[PredictCol] - MinValues[PredictCol]) + MinValues[PredictCol]
+  }
   
   # Handle x y type regression results
   if (RegType =="regression")
@@ -564,6 +701,15 @@ MLDataAnalysis <- function(MLParameterList)
   
   if (nrow(DataFrame)>0) 
   {
+    
+    # Check data formats before pre-processing
+    DataAnalysis(DataFrame,
+                 PredictionVariable  = MLParameterList$PredictionVariable,
+                 Title               = MLParameterList$ProjectTitle,
+                 PrintExamples       = MLParameterList$PrintExamplesinAnalysis,
+                 DrawCharts          = MLParameterList$DrawChartsinAnalysis,
+                 BeforePreProcessing = TRUE)
+    
     # Pre-Process
     ListOfDataFrames <- PreProcess(DataFrame,
                                    Columns = MLParameterList$ColumnsToSelectForTraining,
@@ -571,15 +717,23 @@ MLDataAnalysis <- function(MLParameterList)
                                    Backtest = MLParameterList$BackTest,
                                    Debug = MLParameterList$Debug,
                                    PercentageToSplit = MLParameterList$SplitPercent,
-                                   UseSampleMethod = MLParameterList$SamplingMethod)
+                                   UseSampleMethod = MLParameterList$SamplingMethod,
+                                   OneHotEncodeFactors=MLParameterList$OneHotEncodeFactors,
+                                   Rescale=MLParameterList$Rescale,
+                                   MaxValues=MLParameterList$Maximums,
+                                   MinValues=MLParameterList$Minimums)
     
     # Check data formats after pre-processing
     DataAnalysis(ListOfDataFrames[[1]],
                  PredictionVariable  = MLParameterList$PredictionVariable,
                  Title               = MLParameterList$ProjectTitle,
                  PrintExamples       = MLParameterList$PrintExamplesinAnalysis,
-                 DrawCharts          = MLParameterList$DrawChartsinAnalysis)
+                 DrawCharts          = MLParameterList$DrawChartsinAnalysis,
+                 BeforePreProcessing = FALSE)
     
+    # Display max and mins from training set
+    print("Max and min values from training set")
+    print(DataFrameMaxAndMins(ListOfDataFrames[[1]]))
   }
 }
 
@@ -599,6 +753,7 @@ MLTraining <- function(MLParameterList)
   
   if (nrow(DataFrame)>0) 
   {
+    
     # Pre-Process
     ListOfDataFrames <- PreProcess(DataFrame,
                                    Columns = MLParameterList$ColumnsToSelectForTraining,
@@ -606,7 +761,11 @@ MLTraining <- function(MLParameterList)
                                    Backtest = MLParameterList$BackTest,
                                    Debug = MLParameterList$Debug,
                                    PercentageToSplit = MLParameterList$SplitPercent,
-                                   UseSampleMethod = MLParameterList$SamplingMethod)
+                                   UseSampleMethod = MLParameterList$SamplingMethod,
+                                   OneHotEncodeFactors=MLParameterList$OneHotEncodeFactors,
+                                   Rescale=MLParameterList$Rescale,
+                                   MaxValues=MLParameterList$Maximums,
+                                   MinValues=MLParameterList$Minimums)
     
     # Check data formats after pre-processing
     DataAnalysis(ListOfDataFrames[[1]],
@@ -636,7 +795,8 @@ MLTraining <- function(MLParameterList)
                                     Backtest    = MLParameterList$BackTest,
                                     Debug       = MLParameterList$Debug,
                                     LoadModel   = MLParameterList$SaveModelToFile,
-                                    FileName    = MLParameterList$FileNameOfModel)
+                                    FileName    = MLParameterList$FileNameOfModel,
+                                    PredictVariable = MLParameterList$PredictionVariable)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TrainingPredictions,
@@ -647,7 +807,11 @@ MLTraining <- function(MLParameterList)
                                     RegressionModel     = MLParameterList$RegressionModel,
                                     Variable            = MLParameterList$PredictionVariable,
                                     RegType             = MLParameterList$RegressionType,
-                                    DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                    DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                    Rescale=MLParameterList$Rescale,
+                                    MaxValues=MLParameterList$Maximums,
+                                    MinValues=MLParameterList$Minimums,
+                                    ColumnNames=MLParameterList$DisplayColumnNames)
       
       
       # Predict testing set
@@ -657,7 +821,8 @@ MLTraining <- function(MLParameterList)
                                      Backtest    = MLParameterList$BackTest,
                                      Debug       = MLParameterList$Debug,
                                      LoadModel   = MLParameterList$SaveModelToFile,
-                                     FileName    = MLParameterList$FileNameOfModel)
+                                     FileName    = MLParameterList$FileNameOfModel,
+                                     PredictVariable = MLParameterList$PredictionVariable)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
@@ -668,7 +833,11 @@ MLTraining <- function(MLParameterList)
                                     RegressionModel     = MLParameterList$RegressionModel,
                                     Variable            = MLParameterList$PredictionVariable,
                                     RegType             = MLParameterList$RegressionType,
-                                    DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                    DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                    Rescale=MLParameterList$Rescale,
+                                    MaxValues=MLParameterList$Maximums,
+                                    MinValues=MLParameterList$Minimums,
+                                    ColumnNames=MLParameterList$DisplayColumnNames)
       
     }
     
@@ -696,7 +865,8 @@ MLTraining <- function(MLParameterList)
                                    Backtest               = MLParameterList$BackTest,
                                    Debug                  = MLParameterList$Debug,
                                    LoadModel              = MLParameterList$SaveModelToFile,
-                                   FileName               = MLParameterList$FileNameOfModel)
+                                   FileName               = MLParameterList$FileNameOfModel,
+                                   PredictVariable = MLParameterList$PredictionVariable)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TrainingPredictions,
@@ -707,7 +877,11 @@ MLTraining <- function(MLParameterList)
                                   RegressionModel     = MLParameterList$RegressionModel,
                                   Variable            = MLParameterList$PredictionVariable,
                                   RegType             = MLParameterList$RegressionType,
-                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                  Rescale=MLParameterList$Rescale,
+                                  MaxValues=MLParameterList$Maximums,
+                                  MinValues=MLParameterList$Minimums,
+                                  ColumnNames=MLParameterList$DisplayColumnNames)
       
       # Predict testing set
       TestingPredictions <- PredictRF(ListOfDataFrames[[2]],
@@ -716,7 +890,8 @@ MLTraining <- function(MLParameterList)
                                   Backtest               = MLParameterList$BackTest,
                                   Debug                  = MLParameterList$Debug,
                                   LoadModel              = MLParameterList$SaveModelToFile,
-                                  FileName               = MLParameterList$FileNameOfModel)
+                                  FileName               = MLParameterList$FileNameOfModel,
+                                  PredictVariable = MLParameterList$PredictionVariable)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
@@ -727,7 +902,11 @@ MLTraining <- function(MLParameterList)
                                   RegressionModel     = MLParameterList$RegressionModel,
                                   Variable            = MLParameterList$PredictionVariable,
                                   RegType             = MLParameterList$RegressionType,
-                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                  Rescale=MLParameterList$Rescale,
+                                  MaxValues=MLParameterList$Maximums,
+                                  MinValues=MLParameterList$Minimums,
+                                  ColumnNames=MLParameterList$DisplayColumnNames)
       
     }
     
@@ -753,7 +932,8 @@ MLTraining <- function(MLParameterList)
                                   Backtest          = MLParameterList$BackTest,
                                   Debug             = MLParameterList$Debug,
                                   LoadModel         = MLParameterList$SaveModelToFile,
-                                  FileName          = MLParameterList$FileNameOfModel)
+                                  FileName          = MLParameterList$FileNameOfModel,
+                                  PredictVariable = MLParameterList$PredictionVariable)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TrainingPredictions,
@@ -764,7 +944,11 @@ MLTraining <- function(MLParameterList)
                                   RegressionModel     = MLParameterList$RegressionModel,
                                   Variable            = MLParameterList$PredictionVariable,
                                   RegType             = MLParameterList$RegressionType,
-                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                  Rescale=MLParameterList$Rescale,
+                                  MaxValues=MLParameterList$Maximums,
+                                  MinValues=MLParameterList$Minimums,
+                                  ColumnNames=MLParameterList$DisplayColumnNames)
       
       # Predict testing set
       TestingPredictions <- PredictRFRLT(ListOfDataFrames[[2]],
@@ -773,7 +957,8 @@ MLTraining <- function(MLParameterList)
                                    Backtest          = MLParameterList$BackTest,
                                    Debug             = MLParameterList$Debug,
                                    LoadModel         = MLParameterList$SaveModelToFile,
-                                   FileName          = MLParameterList$FileNameOfModel)
+                                   FileName          = MLParameterList$FileNameOfModel,
+                                   PredictVariable = MLParameterList$PredictionVariable)
       
       # Do results processing
       ResultsDataFrame <- PostProcess(TestingPredictions,
@@ -784,7 +969,11 @@ MLTraining <- function(MLParameterList)
                                   RegressionModel     = MLParameterList$RegressionModel,
                                   Variable            = MLParameterList$PredictionVariable,
                                   RegType             = MLParameterList$RegressionType,
-                                  DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                  DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                  Rescale=MLParameterList$Rescale,
+                                  MaxValues=MLParameterList$Maximums,
+                                  MinValues=MLParameterList$Minimums,
+                                  ColumnNames=MLParameterList$DisplayColumnNames)
       
     }
     
@@ -816,10 +1005,14 @@ MLPrediction <- function(MLParameterList)
     ListOfDataFrames <- PreProcess(DataFrame,
                                    Columns = MLParameterList$ColumnsToSelectForTraining,
                                    ColumnNames = MLParameterList$DisplayColumnNames,
-                                   Backtest = FALSE,
-                                   Debug = FALSE,
+                                   Backtest = MLParameterList$BackTest,
+                                   Debug = MLParameterList$Debug,
                                    PercentageToSplit = MLParameterList$SplitPercent,
-                                   UseSampleMethod = MLParameterList$SamplingMethod)
+                                   UseSampleMethod = MLParameterList$SamplingMethod,
+                                   OneHotEncodeFactors=MLParameterList$OneHotEncodeFactors,
+                                   Rescale=MLParameterList$Rescale,
+                                   MaxValues=MLParameterList$Maximums,
+                                   MinValues=MLParameterList$Minimums)
     
     if (MLParameterList$RegressionModel == "SVM")
     {
@@ -843,7 +1036,11 @@ MLPrediction <- function(MLParameterList)
                                       RegressionModel     = MLParameterList$RegressionModel,
                                       Variable            = MLParameterList$PredictionVariable,
                                       RegType             = MLParameterList$RegressionType,
-                                      DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                      DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                      Rescale=MLParameterList$Rescale,
+                                      MaxValues=MLParameterList$Maximums,
+                                      MinValues=MLParameterList$Minimums,
+                                      ColumnNames=MLParameterList$DisplayColumnNames)
       
     }
     
@@ -870,7 +1067,11 @@ MLPrediction <- function(MLParameterList)
                                       RegressionModel     = MLParameterList$RegressionModel,
                                       Variable            = MLParameterList$PredictionVariable,
                                       RegType             = MLParameterList$RegressionType,
-                                      DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                      DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                      Rescale=MLParameterList$Rescale,
+                                      MaxValues=MLParameterList$Maximums,
+                                      MinValues=MLParameterList$Minimums,
+                                      ColumnNames=MLParameterList$DisplayColumnNames)
       
     }
     
@@ -897,7 +1098,11 @@ MLPrediction <- function(MLParameterList)
                                       RegressionModel     = MLParameterList$RegressionModel,
                                       Variable            = MLParameterList$PredictionVariable,
                                       RegType             = MLParameterList$RegressionType,
-                                      DrawCharts          = MLParameterList$DrawChartsOfResults)
+                                      DrawCharts          = MLParameterList$DrawChartsOfResults,
+                                      Rescale=MLParameterList$Rescale,
+                                      MaxValues=MLParameterList$Maximums,
+                                      MinValues=MLParameterList$Minimums,
+                                      ColumnNames=MLParameterList$DisplayColumnNames)
       
     }
     
@@ -911,8 +1116,8 @@ MLPrediction <- function(MLParameterList)
 MLParameterList <- SetParameters()
 
 # Call the training function
-MLTraining(MLParameterList)
+#MLTraining(MLParameterList)
 
-#MLDataAnalysis(MLParameterList)
+MLDataAnalysis(MLParameterList)
 
 #MLPrediction(MLParameterList)
