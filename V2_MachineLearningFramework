@@ -15,6 +15,19 @@ set.seed(50) # Forces same random number to be produced
 # Example Framework code
 rm(list=ls())
 
+# Add libraries required here ...
+
+
+# Add data loading parameters here ...
+SetDataLoadParameters <- function()
+{
+
+  # Add all the additional parameters needed to load data here (eg Instrument) ...
+  DataLoadParameters = list()
+  DataLoadParameters$Example = "Example Data Load parameter"
+  
+  return(DataLoadParameters)
+}
 
 # Function to ensure no global variables are used within the Machine Learning Functions
 #
@@ -58,22 +71,10 @@ SetParameters <- function()
   MLParameterList$PredictionVariable <- "Weight"                                          # y^ the prediction variable
   MLParameterList$VariableNames <- setdiff(MLParameterList$DisplayColumnNames,MLParameterList$PredictionVariable)
   
-  # Load parameters
-  MLParameterList$BackTest         <- FALSE
-  MLParameterList$Debug            <- TRUE
-  
-  
+  # Sampling method
   MLParameterList$SamplingMethod   <- FALSE
   MLParameterList$SaveModelToFile  <- TRUE
   MLParameterList$FileNameOfModel  <- "ML_Model"
-  
-  # Data Analysis Options
-  MLParameterList$PrintExamplesinAnalysis <- FALSE
-  MLParameterList$DrawChartsinAnalysis    <- TRUE
-  MLParameterList$DrawChartsOfResults     <- TRUE
-  MLParameterList$DrawImportanceCharts    <- TRUE
-  
-  
   
   # Regression Options
   MLParameterList$RegressionModel <- "RF"            # Can be SVM , RF or RFRLT
@@ -81,6 +82,15 @@ SetParameters <- function()
   MLParameterList$NumberOfTrees   <- 100
   MLParameterList$SplitPercent    <- 80/100
   
+  # Load parameters
+  MLParameterList$BackTest         <- FALSE
+  MLParameterList$Debug            <- TRUE
+  
+  # Data Analysis Options
+  MLParameterList$PrintExamplesinAnalysis <- FALSE
+  MLParameterList$DrawChartsinAnalysis    <- TRUE
+  MLParameterList$DrawChartsOfResults     <- TRUE
+  MLParameterList$DrawImportanceCharts    <- TRUE
   
   # Load ggplot library if charts are required
   if ((MLParameterList$DrawChartsinAnalysis == TRUE) || (MLParameterList$DrawChartsOfResults == TRUE) || (MLParameterList$DrawImportanceCharts == TRUE))
@@ -94,8 +104,6 @@ SetParameters <- function()
 }
 
 
-
-
 #####################################################################################
 #
 # Functions - Edit the Data Load and Format Function to ingest the data
@@ -103,10 +111,11 @@ SetParameters <- function()
 #####################################################################################
 
 # Function to load a check data 
-DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE)
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,DataLoadParameters="")
 {
   if (Debug==TRUE) {print("Loading data")}
   
+  if (Debug==TRUE) {print(paste("Example data load parameter",DataLoadParameters$Example))}
   
   # Use example MTCARS data set
   DataFrame <- as.data.frame(mtcars)
@@ -691,13 +700,14 @@ ImportancePlot <- function(Model,Title="",SubTitle="",Caption="")
 #
 ###############################################################################
 
-MLDataAnalysis <- function(MLParameterList)
+MLDataAnalysis <- function(MLParameterList,DataLoadParameters)
 {
   
   # Load data
   DataFrame <- DataLoadAndFormat(Backtest=MLParameterList$BackTest,
                                  Debug=MLParameterList$Debug,
-                                 ConvertToFactors=MLParameterList$ConvertToFactors)
+                                 ConvertToFactors=MLParameterList$ConvertToFactors,
+                                 DataLoadParameters)
   
   if (nrow(DataFrame)>0) 
   {
@@ -743,13 +753,14 @@ MLDataAnalysis <- function(MLParameterList)
 #
 ###############################################################################
 
-MLTraining <- function(MLParameterList)
+MLTraining <- function(MLParameterList,DataLoadParameters)
 {
 
   # Load data
   DataFrame <- DataLoadAndFormat(Backtest=MLParameterList$BackTest,
                                  Debug=MLParameterList$Debug,
-                                 ConvertToFactors=MLParameterList$ConvertToFactors)
+                                 ConvertToFactors=MLParameterList$ConvertToFactors,
+                                 DataLoadParameters)
   
   if (nrow(DataFrame)>0) 
   {
@@ -990,13 +1001,14 @@ MLTraining <- function(MLParameterList)
 #
 ###############################################################################
 
-MLPrediction <- function(MLParameterList)
+MLPrediction <- function(MLParameterList,DataLoadParameters)
 {
   
   # Load data
   DataFrame <- DataLoadAndFormat(Backtest   =  MLParameterList$BackTest,
                                  Debug      =  MLParameterList$Debug,
-                                 ConvertToFactors = MLParameterList$ConvertToFactors)
+                                 ConvertToFactors = MLParameterList$ConvertToFactors,
+                                 DataLoadParameters = DataLoadParameters)
   
   if (nrow(DataFrame)>0) 
   {
@@ -1112,12 +1124,13 @@ MLPrediction <- function(MLParameterList)
   
 }
 
-
-MLParameterList <- SetParameters()
+# Call these two functions when script is sourced
+DataLoadParameters <- SetDataLoadParameters()
+MLParameterList    <- SetParameters()
 
 # Call the training function
-#MLTraining(MLParameterList)
+#MLTraining(MLParameterList,DataLoadParameters)
 
-MLDataAnalysis(MLParameterList)
+MLDataAnalysis(MLParameterList,DataLoadParameters)
 
-#MLPrediction(MLParameterList)
+#MLPrediction(MLParameterList,DataLoadParameters)
