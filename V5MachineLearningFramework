@@ -1,8 +1,8 @@
 ###########################################################
 #
-# Machine Learning Framework V2.0
+# Machine Learning Framework V5.0
 #
-# For 2 x Random Forrests and SVM models only
+# Multi models now supported
 #
 ###########################################################
 #
@@ -977,7 +977,7 @@ PostProcess <- function(DataFrame,
     DataFrame$Error <- DataFrame$Prediction - DataFrame$Actual
     
     # Calculate the RMSE and return it as part of the function
-    RMSE <- sqrt(sum(DataFrame$Error^2))
+    RMSE <- sqrt(mean(DataFrame$Error^2))
     ReturnDataFrame <- data.frame(Desc=paste(Item,"RMS Error"),RMSE=RMSE)
     print(ReturnDataFrame)
     
@@ -1911,11 +1911,27 @@ MLPrediction <- function(MLParameterList,DataLoadParameters)
 DataLoadParameters <- SetDataLoadParameters()
 MLParameterList    <- SetParameters()
 
-# Call the training function
-#Results <- MLTraining(MLParameterList,DataLoadParameters)
-#print(head(Results))
-
+# Data analysis function
 #MLDataAnalysis(MLParameterList,DataLoadParameters)
 
-Results <- MLPrediction(MLParameterList,DataLoadParameters)
-print(Results)
+
+# Call the training function
+#Results <- MLTraining(MLParameterList,DataLoadParameters)
+
+# Auto ML - Which model gives best predictions
+ModelsToTest <- c("RF","NN","KNN","XGB","DEEPNET","RFRLT","SVM")
+ListOfResults <- data.frame(Model = "NA",RMS = 0)
+for (Model in ModelsToTest)
+{
+  MLParameterList$RegressionModel           <- Model 
+  Results <- MLTraining(MLParameterList,DataLoadParameters)
+  ListOfResults <- rbind(ListOfResults,data.frame(Model=Model,RMS=sqrt(mean(Results$Error * Results$Error))))
+}
+ListOfResults <- ListOfResults[-1,]
+ListOfResults$RMS <- round(ListOfResults$RMS,2)
+library(plyr)
+ListOfResults <- arrange(ListOfResults,RMS)
+print(ListOfResults)
+
+#Results <- MLPrediction(MLParameterList,DataLoadParameters)
+#print(head(Results))
