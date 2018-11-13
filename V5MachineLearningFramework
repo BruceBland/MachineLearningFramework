@@ -1903,7 +1903,10 @@ MLPrediction <- function(MLParameterList,DataLoadParameters)
     print("No data found")
   }
   
-  return(TestingResultsDataFrame)
+  Results <- ProcessPredictions(TrainingResultsDataFrame,TestingResultsDataFrame,DataFrame,DataLoadParameters)
+  
+  
+  return(Results)
   
 }
 
