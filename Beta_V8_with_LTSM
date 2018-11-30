@@ -1,7 +1,10 @@
 
+
+
+
 ###########################################################
 #
-# Machine Learning Framework beta v8.0
+# Machine Learning Framework V7.0
 #
 # Multi models now supported including KERAS support
 #
@@ -42,7 +45,7 @@ SetParameters <- function()
   MLParameterList = list()
   
   MLParameterList$ProjectTitle = "Sin Wave"
-  MLParameterList$ColumnsToSelectForTraining <- c("X","Y") # Reduce data set from original
+  MLParameterList$ColumnsToSelectForTraining <- c("t","Y") # Reduce data set from original
   MLParameterList$DisplayColumnNames <- MLParameterList$ColumnsToSelectForTraining
   
   MLParameterList$ConvertToFactors     <- TRUE           # Must be false for SVM
@@ -51,15 +54,15 @@ SetParameters <- function()
   MLParameterList$OneHotEncodeFactors  <- TRUE         # Use for neural networks
   
   MLParameterList$Rescale     <- TRUE                     # Rescale all the values (must be one hot encoded)
-  MLParameterList$Maximums    <- c(1,1) # Max values for each variable
-  MLParameterList$Minimums    <- c(-1,-1)       # Min value for each variable
+  MLParameterList$Maximums    <- c(400,1) # Max values for each variable
+  MLParameterList$Minimums    <- c(0,-1)       # Min value for each variable
   
   # Prediction variable
   MLParameterList$PredictionVariable <- "Y"                                          # y^ the prediction variable
   MLParameterList$VariableNames <- setdiff(MLParameterList$DisplayColumnNames,MLParameterList$PredictionVariable)
   
   # Sampling method
-  MLParameterList$SamplingMethod            <- TRUE
+  MLParameterList$SamplingMethod            <- FALSE
   MLParameterList$SaveModelToFile           <- FALSE
   MLParameterList$FileNameOfModel           <- "ML_Model"
   
@@ -73,7 +76,7 @@ SetParameters <- function()
   
   # NeuralNet parameters
   MLParameterList$HiddenLayersStructure     <- c(50)           # Layers required for NN only (Nodes only for this model)
-  MLParameterList$Iterations                <- 500             # Number of iterations
+  MLParameterList$Iterations                <- 100             # Number of iterations
   
   # KNN parameters
   MLParameterList$K                         <- 10              # KNN only
@@ -90,7 +93,7 @@ SetParameters <- function()
   MLParameterList$visible_dropout           <- 0
   
   # Keras parameters (Note: Will not work well with small data sets)
-  MLParameterList$Epochs                     = 500             # Number of training epochs - 50
+  MLParameterList$Epochs                     = 5             # Number of training epochs - 50
   MLParameterList$BatchSize                  = 100             # Batch size                 - 128
   MLParameterList$ValidationSplit            = 0.2             # Split for validation
   
@@ -195,20 +198,20 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,Da
   if (Debug==TRUE) {print("Creating test data")}
   
   # How many cycles will we show the network
-  Frequency <- 6
+  Frequency <- 5
   w <- 2*pi*Frequency
   
   # Now generate a seqence (Note: Smaller by= will give more data to train on)
   t <- seq(0.005,2,by=0.005)
   
-  sdev <- 0.02
+  sdev <- 0.1
   x <- sin(t*w) + rnorm(400, mean=0, sd=sdev)
   y <- cos(t*w) + rnorm(400, mean=0, sd=sdev)
   
   # Plot x and y
   plot(x)
   plot(y)
-  plot(x,y)
+  plot(t,y)
   
   # Samples of 20 time series
   #X <- matrix(x, nrow = 40)
@@ -411,7 +414,6 @@ PreProcess <- function(DataFrame,
   # Generic code
   DataFrame <- DataFrame[,Columns]
   colnames(DataFrame) <- ColumnNames
-  
   
   # Rescale all data using provided max and mins
   if (Rescale == TRUE)
@@ -1090,15 +1092,17 @@ TrainingModelKeras <- function(DataFrame,
     model <- keras_model_sequential()
     
     model %>%
-      layer_lstm(units            = 40, 
-                 input_shape      = c(1, 1), 
+      layer_lstm(units            = 40, # out shape
+                 input_shape      = c(1, 1),
                  batch_size       = 40,
-                 return_sequences = TRUE, 
-                 stateful         = TRUE) %>% 
-      layer_lstm(units            = 40, 
+                 return_sequences = TRUE,
+                 stateful         = TRUE) %>%
+      layer_dropout(rate = 0.1) %>%
+      layer_lstm(units            = 300, 
                  return_sequences = FALSE, 
-                 stateful         = TRUE) %>% 
-      layer_dense(units = 1)
+                 stateful         = TRUE) %>%
+      layer_dropout(rate = 0.1) %>%
+      layer_dense(units = 1, activation = "linear")
     
     model %>% 
       compile(loss = 'mae', optimizer = 'adam')
@@ -1107,22 +1111,28 @@ TrainingModelKeras <- function(DataFrame,
   
   if (Type == "LTSM")
   {
-    x_train_arr <- array(data = VariableColumns, dim = c(length(VariableColumns), 1, 1))
-    y_train_arr <- array(data = PredictVariable, dim = c(length(PredictVariable), 1))
+    lag_value <- 40
+    x_train_data <- lag(PredictVariable,lag_value)
+    x_train_data <- tail(x_train_data,(length(PredictVariable)-lag_value))
+    y_train_data <- tail(PredictVariable,(length(PredictVariable)-lag_value))
+    
+    x_train_arr <- array(data = x_train_data, dim = c(length(x_train_data), 1, 1))
+    y_train_arr <- array(data = y_train_data, dim = c(length(y_train_data), 1))
     
     model <- CreateModelLTSM()
-    for (i in 1:Epochs) {
-      model %>% fit(x          = x_train_arr, 
-                    y          = y_train_arr, 
-                    batch_size = 40,
-                    epochs     = 1, 
-                    verbose    = 1, 
-                    shuffle    = FALSE)
+    
+    #for (i in 1:Epochs) {
+    model %>% fit(x          = x_train_arr, 
+                  y          = y_train_arr, 
+                  batch_size = 40,
+                  epochs     = 1200, 
+                  verbose    = 1, 
+                  shuffle    = FALSE)
       
-      model %>% reset_states()
-      cat("Epoch: ", i)
+   #   model %>% reset_states()
+   #   cat("Epoch: ", i)
       
-    }
+   # }
   } else {
     # Fit model to data 
     history = fit(model,  VariableColumns, y_data_oneh, epochs = Epochs, batch_size = BatchSize, validation_split = ValidationSplit)
@@ -1187,6 +1197,7 @@ PredictKeras <- function(DataFrame,
     x_test_arr <- array(data = VariableColumns, dim = c(length(VariableColumns), 1, 1))
     DataFrame$Prediction <- Model %>% 
       predict(x_test_arr, batch_size = 40) 
+    plot(DataFrame$Prediction)
   }
   return(DataFrame)
   
@@ -2288,7 +2299,7 @@ Results <- MLTraining(MLParameterList,DataLoadParameters)
 print(head(Results))
 plot(Results$Actual)
 plot(Results$Prediction)
-
+plot(Results$Actual,Results$Prediction)
 
 ModelTest <- function()
 {
