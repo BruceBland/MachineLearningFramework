@@ -75,27 +75,27 @@ SetParameters <- function(Debug=TRUE)
   MLParameterList$ConvertToFactors     <- TRUE           
   MLParameterList$OneHotEncodeFactors  <- TRUE            # Use for neural networks
   
-  MLParameterList$AutoScaling          <- FALSE            # Note: Should not be used except for model evaluation
+  MLParameterList$AutoScaling          <- TRUE            # Note: Should not be used except for model evaluation
                                                           # as knowledge of max and mins will effect predictions
                                                           # Automatically scales returning max and mins
                                                           # Affected by autoscaling
   
-  MLParameterList$ProjectTitle               <- "Sin Wave"
-  MLParameterList$ColumnsToSelectForTraining <- c("SinX","LinX","CosX") # Reduce data set from original
+  MLParameterList$ProjectTitle               <- "Calibration"
+  MLParameterList$ColumnsToSelectForTraining <- c("StraightLine","SineWave","WavySineWave") # Reduce data set from original
   #MLParameterList$ColumnsToSelectForTraining <- c("CosX") # USe prediction variable when AutoScaling = TRUE
   
   MLParameterList$Rescale                    <- TRUE             # Rescale all the values (must be one hot encoded)
-  MLParameterList$Maximums                   <- c(2,7,2)       # Max values for each variable
-  MLParameterList$Minimums                   <- c(-2,-2,-2)      # Min value for each variable
+  MLParameterList$Maximums                   <- c(10,2,2)       # Max values for each variable
+  MLParameterList$Minimums                   <- c(-1,-2,-2)      # Min value for each variable
   
   # Prediction variable
-  MLParameterList$PredictionVariable        <- "SinX"                                          # y^ the prediction variable
+  MLParameterList$PredictionVariable        <- "WavySineWave"                                          # y^ the prediction variable
   MLParameterList$DisplayColumnNames        <- MLParameterList$ColumnsToSelectForTraining
   MLParameterList$VariableNames             <- setdiff(MLParameterList$DisplayColumnNames,MLParameterList$PredictionVariable)
   
   # Sampling method
-  MLParameterList$SamplingMethod            <- TRUE
-  MLParameterList$SaveModelToFile           <- FALSE
+  MLParameterList$SamplingMethod            <- TRUE  # WARNING : Set to false for time series data
+  MLParameterList$SaveModelToFile           <- TRUE
   MLParameterList$FileNameOfModel           <- "ML_Model"
   
   # Regression Options
@@ -104,14 +104,14 @@ SetParameters <- function(Debug=TRUE)
   
   # RF Parameters
   MLParameterList$RegressionType            <- "regression"    # Use only regression or classification
-  MLParameterList$NumberOfTrees             <- 100             # Decision tree models only
+  MLParameterList$NumberOfTrees             <- 200             # Decision tree models only
   
   # NeuralNet parameters
   MLParameterList$HiddenLayersStructure     <- c(50)           # Layers required for NN only (Nodes only for this model)
   MLParameterList$Iterations                <- 500             # Number of iterations
   
   # KNN parameters
-  MLParameterList$K                         <- 10              # KNN only
+  MLParameterList$K                         <- 20              # KNN only
   
   # Keras parameters (Note: Will not work well with small data sets)
   MLParameterList$Epochs                     = 50              # Number of training epochs - 50
@@ -136,7 +136,7 @@ SetParameters <- function(Debug=TRUE)
   # Data Analysis Options
   MLParameterList$PrintExamplesinAnalysis   <- TRUE
   MLParameterList$DrawChartsinAnalysis      <- TRUE
-  MLParameterList$DrawChartsOfResults       <- FALSE
+  MLParameterList$DrawChartsOfResults       <- TRUE
   MLParameterList$DrawHistograms            <- FALSE
   MLParameterList$DrawVersusPlots           <- TRUE
   MLParameterList$DrawImportanceCharts      <- TRUE
@@ -254,23 +254,48 @@ LagDataFrame <- function(DataFrame="",
 # Function to load a check data 
 DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,DataLoadParameters="")
 {
-  if (Debug==TRUE) {print("Creating test data")}
+  if (Debug==TRUE) {print("Creating calibration data")}
   
   # Create an example test set for testing
-  x <- seq(0,5,by=0.01)
+  x <- seq(0,2*pi,by=0.005)
   Mean <- 0
-  sd <- 0.05
+  sd <- 0.1
+  
+  # A noisy straight line
+  noise = rnorm(length(x),Mean,sd)
+  StraightLine <- x + noise
+ 
+  
+  # A noisy sin wave
   noise = rnorm(length(x),Mean,sd)   
-  SinX <- sin(x) + noise
+  SineWave <- sin(x) + noise
+ 
   
+  # A wavy sine wave
   noise = rnorm(length(x),Mean,sd)
-  LinX <- x + (noise * 2)
+  WavySineWave <- sin(x) + noise + (cos(x*x)/2)
+ 
   
-  noise = rnorm(length(x),Mean,sd)
-  CosX <- cos(x) + (noise * 5)
+  df <- data.frame(StraightLine=StraightLine,SineWave=SineWave,WavySineWave=WavySineWave)
   
-  df <- data.frame(X=x,SinX=SinX,LinX=LinX,CosX=CosX)
-  print(head(df),5)
+  ResultsPlot <- ggplot(df,aes(x=x,y=StraightLine)) +
+    geom_point(aes(x=x,y=StraightLine),
+               colour="Blue",
+               size=1) +
+    geom_point(aes(x=x,y=SineWave),
+               colour="Red",
+               size=1) +
+    geom_point(aes(x=x,y=WavySineWave),
+               colour="Green",
+               size=1) +
+    xlab(paste("X")) +
+    ylab(paste("Input Variables")) +
+    theme(plot.title = element_text(size = 12),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          text = element_text(size = 8)) +
+    ggtitle(paste("Input Data"))
+  print(ResultsPlot)
   
   DataFrame <- df
   
@@ -2301,26 +2326,33 @@ ModelTest <- function()
   # Auto ML - Which model gives best predictions
   ModelsToTest <- c("RF","NN","KNN","RFRLT","SVM","KERAS","XGB")
   
-  # ModelsToTest <- c("KERAS")
+   #ModelsToTest <- c("KERAS")
   ListOfResults <- data.frame(Model = "NA",RMS = 0)
   for (Model in ModelsToTest)
   {
     MLParameterList$RegressionModel           <- Model 
     Results <- MLTraining(MLParameterList,DataLoadParameters)
-    ResultsPlot <- ggplot(Results,aes(x=Actual,y=Prediction)) +
-      geom_point(aes(x=Actual,y=Prediction),
-                 colour="Blue",
-                 fill="DarkBlue",
+    
+    # Plot the shape
+    Results$X <- seq(1,nrow(Results))
+    ResultsPlot <- ggplot(Results,aes(x=X,y=Prediction)) +
+      geom_point(aes(x=X,y=Prediction),
+                 colour="Red",
+                 fill="Darkred",
                  size=1) +
-      geom_smooth(method="lm",colour="Red") +
-      ylab(paste("Predict Column")) +
-      xlab(paste("Actual Column")) +
+      geom_point(aes(x=X,y=Actual),
+                 colour="DarkGreen",
+                 fill="DarkGreen",
+                 size=1) +
+      xlab(paste("X")) +
+      ylab(paste("Prediction")) +
       theme(plot.title = element_text(size = 12),
             axis.title.x = element_text(size = 10),
             axis.title.y = element_text(size = 10),
             text = element_text(size = 8)) +
       ggtitle(paste("Results",Model))
     print(ResultsPlot)
+    
     ListOfResults <- rbind(ListOfResults,data.frame(Model=Model,RMS=sqrt(mean(Results$Error * Results$Error))))
   }
   ListOfResults <- ListOfResults[-1,]
