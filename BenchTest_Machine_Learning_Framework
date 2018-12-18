@@ -424,6 +424,79 @@ AutoScale <- function(DataFrame = "",
   
 }
 
+# Outlier removal function
+# Uses supsmu for non-seasonal series and a periodic stl decomposition with 
+# seasonal series to identify outliers and estimate their replacements.
+# Example:
+# HistoricExampleData <- OutlierRemoval(DataFrame=HistoricExampleData,
+#                                      Column="Ratio",
+#                                      DrawOutlierChart = TRUE,
+#                                      Debug=TRUE,
+#                                      UseLastn = 250)
+
+OutlierRemoval <- function(DataFrame="",Column="",DrawOutlierChart=TRUE,Debug=TRUE,UseLastn="")
+{
+  
+  if (Debug == TRUE) {print("Starting outlier removal")}
+  
+  # LOad required library
+  library("tsoutliers")
+  
+  #Ensure that the data frame is really a data frame
+  DataFrame <- as.data.frame(DataFrame)
+  
+  DataFrame <- tail(DataFrame,UseLastn)
+  
+  # Extract the column we require
+  TimeSeriesColumn <- DataFrame[,Column]
+  
+  # The function ts is used to create time-series object from column
+  dat.ts <- ts(TimeSeriesColumn,frequency=1)
+  
+  # Now process the outliers
+  data.ts.outliers <- tso(dat.ts)
+  
+  if (Debug == TRUE) {print(data.ts.outliers)}
+  
+  if (DrawOutlierChart == TRUE)
+  {
+    plot(data.ts.outliers)
+  }
+  
+  # Now add the outlier information back to the data frame
+  
+  # First get the Outliers
+  OutlierEffects <- data.ts.outliers$effects
+  
+  # If we did not find any
+  if(is.null(OutlierEffects)==FALSE)
+  {
+    # Get the adjusted values
+    AutoAdjusted <- data.ts.outliers$yadj
+    
+    # Change the column headings to allow for multiple columns to be used
+    NewDF <- data.frame(OutlierEffects,AutoAdjusted)
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  } else {
+    print(paste("No outliers were found on this column",Column))
+    
+    # Creating a adjusted column which is equal to the original
+    NewDF <- data.frame(OutlierEffects=0,AutoAdjusted=TimeSeriesColumn)
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  }
+  
+  if (Debug == TRUE) {print("Finished outlier removal")}
+  
+  return(DataFrame)
+  
+}
+
 ProcessPredictions <- function(TrainingPredictions,TestingPredictions,DataFrame,DataLoadParameters)
 {
   # Put post process function in here
