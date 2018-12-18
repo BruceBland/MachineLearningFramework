@@ -497,6 +497,99 @@ OutlierRemoval <- function(DataFrame="",Column="",DrawOutlierChart=TRUE,Debug=TR
   
 }
 
+# BreakdownDateTime() - Breaks form a datetime column into all possible training selections
+# Note: Format must match input date time format
+#
+# NewDF <- BreakdownDateTime(DataFrame=HistoricExampleData1,
+#                           Column="Date",
+#                           BreakdownDates=TRUE, 
+#                           BreakdownTimes=FALSE,
+#                           DateFormat = "%Y-%m-%d",
+#                           Debug=TRUE)
+
+BreakdownDateTime <- function(DataFrame="",
+                              Column="",
+                              BreakdownDates=TRUE, 
+                              BreakdownTimes=TRUE,
+                              DateFormat = "%Y%m%d %H:%M:%",
+                              Debug=TRUE)
+{
+  if (Debug == TRUE) {print("Starting date time breakdown")}
+  
+  # Load required library
+  library(lubridate)
+  
+  #Ensure that the data frame is really a data frame
+  DataFrame <- as.data.frame(DataFrame)
+  
+  # Extract the column we require
+  DateTimeColumn <- as.character(DataFrame[,Column])
+  
+  # Convert to date time
+  DateTimeColumn <- fast_strptime(DateTimeColumn,DateFormat)
+  DateColumn <- as.Date(DateTimeColumn)
+  
+  # Extract the Date
+  if (BreakdownDates == TRUE)
+  {
+    DateOnly <- date(DateColumn)
+    Year <- year(DateColumn)
+    Month <- month(DateColumn)
+    DayOfMonth <- day(DateColumn)
+    Weekday <- wday(DateColumn)
+    WeekOfYear <- week(DateColumn)
+    DayOfQuarter <- qday(DateColumn)
+    Quarter <- quarter(DateColumn)
+    LeapYear <- leap_year(DateColumn)
+    
+    # Change the column headings to allow for multiple columns to be used
+    NewDF <- data.frame(DateOnly,
+                        Year,
+                        Month,
+                        DayOfMonth,
+                        Weekday,
+                        WeekOfYear,
+                        DayOfQuarter,
+                        Quarter,
+                        LeapYear)
+    
+    # Change the column names to make them standard
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  }
+  
+  # Extract the Times
+  if (BreakdownTimes == TRUE)
+  {
+    Is_AM <- am(DateTimeColumn)
+    Is_PM <- pm(DateTimeColumn)
+    Hour <- hour(DateTimeColumn)
+    Minute <- minute(DateTimeColumn)
+    Second <- second(DateTimeColumn)
+    
+    # Change the column headings to allow for multiple columns to be used
+    NewDF <- data.frame(Is_AM,
+                        Is_PM,
+                        Hour,
+                        Minute,
+                        Second)
+    
+    # Change the column names to make them standard
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  }
+  
+  if (Debug == TRUE) {print("Finish date time breakdown")}
+  
+  return(DataFrame)
+  
+}
+
+
 ProcessPredictions <- function(TrainingPredictions,TestingPredictions,DataFrame,DataLoadParameters)
 {
   # Put post process function in here
