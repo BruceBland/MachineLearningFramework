@@ -497,6 +497,138 @@ OutlierRemoval <- function(DataFrame="",Column="",DrawOutlierChart=TRUE,Debug=TR
   
 }
 
+
+# Outlier removal function using iqr or gesd methods
+#
+# NewDF <- OutlierRemovalSTL(DataFrame=btc,
+#                           DateColumn="Date",
+#                           Column="Close",
+#                           DrawOutlierChart=TRUE,
+#                           Debug=TRUE,
+#                           UseLastn=500,
+#                           ChartTitle = "TSLA.US",
+#                           Method = "gesd",
+#                           PercentAnomalies = 1)
+
+OutlierRemovalSTL <- function(DataFrame="",
+                              DateColumn="",
+                              Column="",
+                              DrawOutlierChart=TRUE,
+                              Debug=TRUE,
+                              UseLastn="",
+                              ChartTitle="",
+                              Method = "iqr",
+                              PercentAnomalies = 1)
+{
+  
+  if (Debug == TRUE) {print("Starting outlier removal")}
+  
+  library(anomalize) #tidy anomaly detectiom
+  library(tidyverse) #tidyverse packages like dplyr, ggplot, tidyr
+  library(tibbletime)
+  
+  #Ensure that the data frame is really a data frame
+  DataFrame <- as.data.frame(DataFrame)
+  
+  # Remove the end of it as required
+  DataFrame <- tail(DataFrame,UseLastn)
+  
+  # Extract the column we require
+  DateSeriesColumn <- DataFrame[,DateColumn]
+  TimeSeriesColumn <- DataFrame[,Column]
+  
+  # Create a data frame
+  btc <- data.frame(Price=ts(TimeSeriesColumn),date=DateSeriesColumn)
+  
+  # Anomalies
+  timedecomp <- time_decompose(as.tibble(btc),Price, method = "stl", frequency = "auto", trend = "auto") 
+  Anoms <-  tryCatch({
+    anomalize(timedecomp,remainder, method = Method, max_anoms = (PercentAnomalies/100)) # gesd or iqr
+  } , warning = function(w) {
+    # warning-handler-code
+  }, error = function(e) {
+    #  error-handler-code
+  }, finally = {
+    # cleanup-code
+  })
+  
+  # If we found some
+  if (is.null(Anoms) == FALSE)
+  {
+    Anoms$Anom <- ifelse(Anoms$anomaly == "Yes",1,NA)
+    Anoms$Adjusted <- ifelse(Anoms$anomaly == "Yes",Anoms$trend,Anoms$observed)
+    
+    if (DrawOutlierChart == TRUE)
+    {
+      
+      library(ggplot2)
+      ResultsPlot1 <- ggplot(Anoms,aes(x=date,y=observed)) +
+        geom_step(aes(x=date,y=observed),
+                  colour="Blue",
+                  size=1,
+                  alpha=1) +
+        geom_step(aes(x=date,y=Adjusted),
+                  colour="Orange",
+                  size=1,
+                  alpha=1) +
+        geom_step(aes(x=date,y=trend),
+                  colour="Green",
+                  size=0.5) + 
+        geom_point(aes(x=date,y=observed*Anom),
+                   colour="Red",
+                   size=1) + 
+        xlab(paste(DateColumn)) +
+        ylab(paste(Column)) +
+        theme(plot.title = element_text(size = 12),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              text = element_text(size = 8)) +
+        ggtitle(paste(ChartTitle,DateColumn,Column))
+      
+      ResultsPlot2 <- ggplot(Anoms,aes(x=date,y=observed)) +
+        geom_step(aes(x=date,y=remainder),
+                  colour="Red",
+                  size=0.5) + 
+        xlab(paste(DateColumn)) +
+        ylab(paste("Remander")) +
+        theme(plot.title = element_text(size = 12),
+              axis.title.x = element_text(size = 10),
+              axis.title.y = element_text(size = 10),
+              text = element_text(size = 8)) +
+        ggtitle(paste("Remainder"))
+      
+      library(gridExtra)
+      grid.arrange(ResultsPlot1,ResultsPlot2)
+      
+    }
+    
+    
+    # Creating a adjusted column which is equal to the original
+    NewDF <- data.frame(Trend=Anoms$trend,AutoAdjusted=Anoms$Adjusted,Remainder=Anoms$remainder)
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+    
+  } else {
+    
+    print(paste("No outliers were found on this column, try changing PercentAnomalies to be higher",Column))
+    
+    # Creating a adjusted column which is equal to the original
+    NewDF <- data.frame(Trend=NA,AutoAdjusted=NA,Remainder=NA)
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  }
+  
+  if (Debug == TRUE) {print("Finished outlier removal")}
+  
+  return(DataFrame)
+  
+}
+
+
 # BreakdownDateTime() - Breaks form a datetime column into all possible training selections
 # Note: Format must match input date time format
 #
