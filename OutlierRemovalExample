@@ -1,0 +1,186 @@
+
+####################################################################################
+#
+# Get Data function to load dat from Stooq
+#
+#####################################################################################
+GetData <- function(Instrument="",DataPath="D:\\Data",DebugThis=TRUE,Historic=TRUE)
+{
+  
+  library(fst)
+  
+  if (Historic == TRUE)
+  {
+    
+    # Lets store the Instrument with todays date
+    Today = Sys.Date()
+    destfile=paste(DataPath,"\\",Instrument,"-",Today,".CSV",sep="")
+    
+    
+    # Do we already have the data
+    if (file.exists(destfile)) {
+      
+      if (DebugThis==TRUE) {print(paste("Found file already exists so loading now ...",destfile))}
+      
+      InstrumentData <- read.fst(destfile,as.data.table = TRUE)
+      
+      return(InstrumentData)
+      
+    } else {
+      
+      if (DebugThis==TRUE) {print(paste("Loading from Stooq ..."))}
+      
+      InstrumentData <- read.csv(paste("https://stooq.com/q/d/l/?s=",Instrument,"&i=d",sep=""))
+      
+      if (nrow(InstrumentData) > 0)
+      {
+        # Create rownames
+        rownames(InstrumentData) <- InstrumentData$Date
+        InstrumentData$Date <- NULL
+        
+        # Convert the data format
+        InstrumentData <- as.data.frame(InstrumentData)
+        InstrumentData$Date <- as.Date(rownames(InstrumentData),"%Y-%m-%d")
+        
+        # Write file to FST format and then read back  
+        if (DebugThis==TRUE) {print(paste("Found data now writing file for next time ...",destfile))}
+        write.fst(InstrumentData,destfile)
+        
+        if (DebugThis==TRUE) {print(paste("Reading file back in now ...",destfile))}
+        InstrumentData <- read.fst(destfile,as.data.table = TRUE)
+      } else {
+        InstrumentData <- NULL
+      }
+      
+      return(InstrumentData)
+    }
+    
+  } else {
+    
+    
+    if (DebugThis==TRUE) {print(paste("Loading LIVE DATA from Stooq ..."))}
+    
+    InstrumentData <- read.csv(paste("https://stooq.com/q/l/?s=",Instrument,"&f=sd2t2ohlcv&h&e=csv",sep=""))
+    
+    if (nrow(InstrumentData) > 0)
+    {
+      # Create rownames
+      rownames(InstrumentData) <- InstrumentData$Date
+      InstrumentData$Date <- NULL
+      
+      # Convert the data format
+      InstrumentData <- as.data.frame(InstrumentData)
+      InstrumentData$Date <- as.Date(rownames(InstrumentData),"%Y-%m-%d")
+      
+      if (DebugThis==TRUE) {print(paste("Found LIVE data",nrow(InstrumentData),"rows returned"))}
+      
+      InstrumentData <- as.data.frame(InstrumentData)
+      
+    } else {
+      InstrumentData <- NULL
+    }
+    
+    return(InstrumentData)
+  }
+  
+}
+
+
+# Outlier removal function
+# Uses supsmu for non-seasonal series and a periodic stl decomposition with 
+# seasonal series to identify outliers and estimate their replacements.
+OutlierRemoval <- function(DataFrame="",Column="",DrawOutlierChart=TRUE,Debug=TRUE,UseLastn="")
+{
+  
+  if (Debug == TRUE) {print("Starting outlier removal")}
+  
+  # LOad required library
+  library("tsoutliers")
+  
+  #Ensure that the data frame is really a data frame
+  DataFrame <- as.data.frame(DataFrame)
+  
+  DataFrame <- tail(DataFrame,UseLastn)
+  
+  # Extract the column we require
+  TimeSeriesColumn <- DataFrame[,Column]
+  
+  # The function ts is used to create time-series object from column
+  dat.ts <- ts(TimeSeriesColumn,frequency=1)
+  
+  # Now process the outliers
+  data.ts.outliers <- tso(dat.ts)
+  
+  if (Debug == TRUE) {print(data.ts.outliers)}
+  
+  if (DrawOutlierChart == TRUE)
+  {
+    plot(data.ts.outliers)
+  }
+  
+  # Now add the outlier information back to the data frame
+  
+  # First get the Outliers
+  OutlierEffects <- data.ts.outliers$effects
+  
+  # If we did not find any
+  if(is.null(OutlierEffects)==FALSE)
+  {
+    # Get the adjusted values
+    AutoAdjusted <- data.ts.outliers$yadj
+    
+    # Change the column headings to allow for multiple columns to be used
+    NewDF <- data.frame(OutlierEffects,AutoAdjusted)
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  } else {
+    print(paste("No outliers were found on this column",Column))
+    
+    # Creating a adjusted column which is equal to the original
+    NewDF <- data.frame(OutlierEffects=0,AutoAdjusted=TimeSeriesColumn)
+    colnames(NewDF) <- paste(Column,"_",colnames(NewDF), collapse = NULL,sep="")
+    
+    # Add the new columns
+    DataFrame <- cbind(DataFrame,NewDF)
+  }
+  
+  if (Debug == TRUE) {print("Finished outlier removal")}
+  
+  return(DataFrame)
+  
+}
+
+# Get historic data
+HistoricExampleData1 <- GetData("BP.UK",DataPath="d:\\temp",DebugThis=TRUE,Historic=TRUE)
+HistoricExampleData2 <- GetData("RDSA.UK",DataPath="d:\\temp",DebugThis=TRUE,Historic=TRUE)
+
+HistoricExampleData <- merge(HistoricExampleData1,HistoricExampleData2,by="Date",suffixes = c("_Stock1","_Stock2"))
+
+HistoricExampleData$Ratio <- HistoricExampleData$Close_Stock1 / HistoricExampleData$Close_Stock2
+
+HistoricExampleData <- OutlierRemoval(DataFrame=HistoricExampleData,
+                                      Column="Ratio",
+                                      DrawOutlierChart = TRUE,
+                                      Debug=TRUE,
+                                      UseLastn = 250)
+
+
+library(ggplot2)
+ResultsPlot <- ggplot(HistoricExampleData,aes(x=Date,y=Ratio)) +
+  geom_step(aes(x=Date,y=Ratio),
+             colour="Blue",
+             size=1) +
+    geom_step(aes(x=Date,y=Ratio_AutoAdjusted),
+              colour="Red",
+              size=0.5) + 
+  xlab(paste("Date")) +
+  ylab(paste("Stock1/Stock2 ratio")) +
+  theme(plot.title = element_text(size = 12),
+        axis.title.x = element_text(size = 10),
+        axis.title.y = element_text(size = 10),
+        text = element_text(size = 8)) +
+  ggtitle(paste("Closing prices with automatic ARIMA adjustment"))
+print(ResultsPlot)
+
