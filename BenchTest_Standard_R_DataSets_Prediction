@@ -1,0 +1,94 @@
+
+###########################################################
+#
+#
+#    BenchTest_Standard_R_DataSets_Prediction.R
+#
+###########################################################
+
+
+source("BenchTest_Machine_Learning_Framework.R")
+
+# Load a data set
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,DataLoadParameters="")
+{
+  if (Debug==TRUE) {print("Creating calibration data")}
+  
+ # ModelDF = data.frame(iris)
+ # ModelDF = data.frame(diamonds)
+ # ModelDF = data.frame(USArrests)
+  ModelDF = data.frame(ToothGrowth)
+  
+  DataFrame <- ModelDF
+  
+  if (Debug==TRUE) {print("Finished loading test data")}
+  
+  return(DataFrame)
+  
+}
+
+# Call these two functions when script is sourced
+DataLoadParameters <- SetDataLoadParameters(Debug=TRUE)
+MLParameterList    <- SetParameters(Debug=TRUE)
+
+MLParameterList$AutoScaling         <- TRUE
+MLParameterList$ProjectTitle        <- "Diamonds data Set"
+MLParameterList$PredictionVariable  <- "Len" 
+MLParameterList$SplitPercent        <- 90/100
+MLParameterList$Debug               <- FALSE
+MLParameterList$SamplingMethod            <- TRUE  # WARNING : Set to false for time series data
+MLParameterList$SaveModelToFile           <- FALSE
+
+# Data analysis function
+MLDataAnalysis(MLParameterList,DataLoadParameters)
+
+
+# Auto ML - Which model gives best predictions
+ModelsToTest <- c("RF","NN","KNN","RFRLT","SVM","KERAS","XGB")
+#ModelsToTest <- rep("XGB",10)
+
+ListOfResults <- data.frame(Model = "NA",RMSE = 0)
+for (Model in ModelsToTest)
+{
+  MLParameterList$RegressionModel           <- Model 
+  Results <- MLTraining(MLParameterList,DataLoadParameters)
+  
+  # Plot the shape
+  Results$X <- seq(1,nrow(Results))
+  ResultsPlot <- ggplot(Results,aes(x=X,y=Prediction)) +
+    geom_point(aes(x=X,y=Prediction),
+               colour="Red",
+               fill="Darkred",
+               size=1) +
+    geom_point(aes(x=X,y=Actual),
+               colour="DarkGreen",
+               fill="DarkGreen",
+               size=1) +
+    xlab(paste("X")) +
+    ylab(paste("Prediction")) +
+    theme(plot.title = element_text(size = 12),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          text = element_text(size = 8)) +
+    ggtitle(paste("Results",MLParameterList$ProjectTitle,"using model",Model))
+  print(ResultsPlot)
+  
+  # Calculate RMSE
+  RMSE          <- sqrt(mean(Results$Error * Results$Error))
+  ListOfResults <- rbind(ListOfResults,data.frame(Model=Model,RMSE=RMSE))
+  
+}
+ListOfResults <- ListOfResults[-1,] # Remove the first one
+
+# Round Results
+ListOfResults$RMSE <- round(ListOfResults$RMSE,3)
+
+# Now arrange
+library(plyr)
+ListOfResults <- arrange(ListOfResults,RMSE)
+print(ListOfResults)
+print(paste("Mean result",mean(ListOfResults$RMSE)))
+print(paste("SD result",sd(ListOfResults$RMSE)))
+hist(ListOfResults$RMSE)
+  
+
