@@ -1,0 +1,203 @@
+---
+title: "AI Analysis"
+output: 
+  flexdashboard::flex_dashboard:
+    orientation: columns
+    vertical_layout: fill
+---
+
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### Data Analysis
+
+```{r setup, include=TRUE}
+
+# Set up the script to be quiet when running
+knitr::opts_knit$set(progress = FALSE, verbose = FALSE)
+
+# Load all the libraries required
+library(flexdashboard)
+library(plotly)
+library(plyr)
+library(DT)
+
+# Now add the main machine learning library
+source("BenchTest_Machine_Learning_Framework.R")
+
+
+# Load a data set
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,DataLoadParameters="")
+{
+  if (Debug==TRUE) {print("Creating calibration data")}
+  
+  DataSet <- "diamonds"
+ 
+  # Used for classification example (set PredictionVariable = Species)
+  if (DataSet == "Iris")
+  {
+    DataFrame = data.frame(iris)
+    DataFrame$SpeciesNumber <- as.integer(DataFrame$Species)
+    DataFrame$Species <- NULL
+  }
+  
+  # Used for example of regression (Set PredictionVariable = Price)
+  if (DataSet == "diamonds")
+  {
+    DataFrame = data.frame(diamonds)
+    DataFrame = head(DataFrame,1000)
+  }
+  
+  if (Debug==TRUE) {print("Finished loading test data")}
+  
+ 
+  
+  return(DataFrame)
+  
+}
+
+```
+
+
+
+```{r Analysis, fig.height=4, fig.width=5, message=FALSE, warning=FALSE, paged.print=FALSE}
+
+# Call these two functions when script is sourced
+DataLoadParameters <- SetDataLoadParameters(Debug=FALSE)
+MLParameterList    <- SetParameters(Debug=FALSE)
+
+MLParameterList$AutoScaling         <- TRUE
+MLParameterList$ProjectTitle        <- "Price" #SpeciesNumber"
+MLParameterList$PredictionVariable  <- "Price" #"SpeciesNumber" 
+MLParameterList$SplitPercent        <- 90/100
+MLParameterList$Debug               <- FALSE
+MLParameterList$SamplingMethod            <- TRUE  # WARNING : Set to false for time series data
+MLParameterList$SaveModelToFile           <- TRUE
+MLParameterList$RegressionType      <- "regression" # regression or classification
+MLParameterList$OneHotEncodeFactors <- TRUE
+MLParameterList$PrintExamplesinAnalysis <- FALSE
+
+
+# Data analysis function
+MLDataAnalysis(MLParameterList,DataLoadParameters)
+
+Model = "XGB"  # "RF","NN","KNN","RFRLT","SVM","KERAS","XGB","GLM"
+```
+
+Column {data-width=650}
+-----------------------------------------------------------------------
+
+### `r Model` Model fit
+
+```{r fig.height=4, fig.width=5, message=FALSE, warning=FALSE}
+
+ModelsToTest <- Model
+
+ListOfResults <- data.frame(Model = "NA",RMSE = 0)
+for (Model in ModelsToTest)
+{
+  MLParameterList$RegressionModel           <- Model 
+  Results <- MLTraining(MLParameterList,DataLoadParameters)
+  
+  # Plot the shape
+  Results$X <- seq(1,nrow(Results))
+  ResultsPlot <- ggplot(Results,aes(x=X,y=Prediction)) +
+    geom_point(aes(x=X,y=Prediction),
+               colour="Red",
+               fill="Darkred",
+               size=2) +
+    geom_point(aes(x=X,y=Actual),
+               colour="DarkGreen",
+               fill="DarkGreen",
+               size=1) +
+    xlab(paste("X")) +
+    ylab(paste("Prediction")) +
+    theme(plot.title = element_text(size = 12),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          text = element_text(size = 8)) 
+
+  #print(ResultsPlot)
+  
+  # Calculate RMSE
+  RMSE          <- sqrt(mean(Results$Error * Results$Error))
+  ListOfResults <- rbind(ListOfResults,data.frame(Model=Model,RMSE=RMSE))
+  
+}
+ListOfResults <- ListOfResults[-1,] # Remove the first one
+
+#print(ListOfResults)
+#print(paste("Mean result",mean(ListOfResults$RMSE)))
+#print(paste("SD result",sd(ListOfResults$RMSE)))
+
+
+```
+
+### `r Model` Model Predictions of `r MLParameterList$PredictionVariable`
+
+```{r}
+
+ggplotly(ResultsPlot)
+
+```
+
+
+### `r Model` Model Errors
+
+```{r}
+
+MLParameterList$DrawChartsOfResults       <- FALSE
+MLParameterList$DrawImportanceCharts      <- FALSE
+
+# Auto ML - Which model gives best predictions
+ModelsToTest <- c("RF","NN","KNN","RFRLT","SVM","KERAS","XGB","GLM")
+#ModelsToTest <- NULL
+for (Model in ModelsToTest)
+{
+  MLParameterList$RegressionModel           <- Model 
+  Results <- MLTraining(MLParameterList,DataLoadParameters)
+  
+  # Plot the shape
+  Results$X <- seq(1,nrow(Results))
+  ResultsPlot <- ggplot(Results,aes(x=X,y=Prediction)) +
+    geom_point(aes(x=X,y=Prediction),
+               colour="Red",
+               fill="Darkred",
+               size=2) +
+    geom_point(aes(x=X,y=Actual),
+               colour="DarkGreen",
+               fill="DarkGreen",
+               size=1) +
+    xlab(paste("Row Number")) +
+    ylab(paste("Prediction")) +
+    theme(plot.title = element_text(size = 12),
+          axis.title.x = element_text(size = 10),
+          axis.title.y = element_text(size = 10),
+          text = element_text(size = 8)) 
+   # ggtitle(paste("Results",MLParameterList$ProjectTitle,"using model",Model))
+  
+  library(plotly)
+
+  #ggplotly(ResultsPlot)
+  #print(ResultsPlot)
+  
+  # Calculate RMSE
+  RMSE          <- sqrt(mean(Results$Error * Results$Error))
+  ListOfResults <- rbind(ListOfResults,data.frame(Model=Model,RMSE=RMSE))
+  
+}
+ListOfResults <- ListOfResults[-1,] # Remove the first one
+
+# Round Results
+ListOfResults$RMSE <- round(ListOfResults$RMSE,3)
+
+# Now arrange
+
+ListOfResults <- arrange(ListOfResults,RMSE)
+
+
+DT::datatable(ListOfResults, options = list(pageLength = length(ModelsToTest)))
+
+```
+
