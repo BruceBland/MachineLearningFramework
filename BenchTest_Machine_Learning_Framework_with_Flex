@@ -1412,7 +1412,10 @@ TrainingModelSVM <- function(DataFrame,
   PredictVariable <- DataFrame[,PredictVariable]
   VariableColumns <- DataFrame[,VariableNames,drop=FALSE]
   
-  Model <- svm(VariableColumns, PredictVariable,type="eps-regression")   #  C-classification 
+  Model <- svm(VariableColumns, 
+               PredictVariable,
+               type="eps-regression", #  C-classification for classification
+               verbosity=0)   
   
   if (PlotImportance==TRUE)
   {
@@ -1492,7 +1495,8 @@ TrainingModelNN <- function(DataFrame,
                size=HiddenNodes,
                linout=T,
                decay=0.07,
-               maxit=Iterations)
+               maxit=Iterations,
+               trace=FALSE)
   
   #Model <- neuralnet(f,data=DataFrame,hidden=HiddenNodes,linear.output=T) # Linear.output = TRUE for regression
   
@@ -1642,7 +1646,7 @@ TrainingModelXGBoost <- function(DataFrame,
                    nthread = MLParameterList$nthread,
                    nrounds = MLParameterList$nrounds,
                    objective = MLParameterList$objective,  
-                   verbose = MLParameterList$verbose)
+                   verbose = 0) # was MLParameterList$verbose
   
   if (PlotImportance == TRUE)
   {
@@ -1895,7 +1899,7 @@ PostProcess <- function(DataFrame,
     # Calculate the RMSE and return it as part of the function
     RMSE <- sqrt(mean(DataFrame$Error^2))
     ReturnDataFrame <- data.frame(Desc=paste(Item,"RMS Error"),RMSE=RMSE)
-    print(ReturnDataFrame)
+    if (Debug==TRUE) {print(ReturnDataFrame)}
     
     if (DrawCharts == TRUE)
     {
@@ -1921,12 +1925,12 @@ PostProcess <- function(DataFrame,
   {
     # Work out if not equal
     DataFrame$Error <- ifelse(DataFrame$Prediction == PredictVariable, 1, 0)
-    print(DataFrame)
+    if (Debug==TRUE) {print(DataFrame)}
     
     # find errors
     ErrorsFrame <- subset(DataFrame,DataFrame$Prediction != DataFrame$Actual)
-    print(paste("Number of rows predicted",nrow(DataFrame)))
-    print(paste("Number of errors found",nrow(ErrorsFrame)))
+    if (Debug==TRUE) {print(paste("Number of rows predicted",nrow(DataFrame)))}
+    if (Debug==TRUE) {print(paste("Number of errors found",nrow(ErrorsFrame)))}
     
     ReturnDataFrame <- ErrorsFrame
     
@@ -2376,7 +2380,8 @@ MLTraining <- function(MLParameterList,DataLoadParameters)
                                       SaveModel         = MLParameterList$SaveModelToFile,
                                       PlotImportance    = MLParameterList$DrawImportanceCharts,
                                       RegType           = MLParameterList$RegressionType,
-                                      FileName          = MLParameterList$FileNameOfModel)
+                                      FileName          = MLParameterList$FileNameOfModel,
+                                      Debug             = MLParameterList$Debug)
       
       
       # Predict from training
@@ -2512,6 +2517,7 @@ MLTraining <- function(MLParameterList,DataLoadParameters)
       Model <-     TrainingModelKNN(ListOfDataFrames[[1]],
                                     ColumnNames       = MLParameterList$VariableNames,
                                     PredictVariable   = MLParameterList$PredictionVariable,
+                                    Debug             = MLParameterList$Debug,
                                     K                 = MLParameterList$K,
                                     SaveModel         = MLParameterList$SaveModelToFile,
                                     PlotImportance    = MLParameterList$DrawImportanceCharts,
@@ -2585,7 +2591,8 @@ MLTraining <- function(MLParameterList,DataLoadParameters)
                                         SaveModel         = MLParameterList$SaveModelToFile,
                                         PlotImportance    = MLParameterList$DrawImportanceCharts,
                                         RegType           = MLParameterList$RegressionType,
-                                        FileName          = MLParameterList$FileNameOfModel)
+                                        FileName          = MLParameterList$FileNameOfModel,
+                                        Debug             = MLParameterList$Debug)
       
       
       # Predict from training
