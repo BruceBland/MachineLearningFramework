@@ -118,23 +118,17 @@ for (Model in ModelsToTest)
           axis.title.y = element_text(size = 10),
           text = element_text(size = 8)) 
 
-  #print(ResultsPlot)
-  
   # Calculate RMSE
   RMSE          <- sqrt(mean(Results$Error * Results$Error))
   ListOfResults <- rbind(ListOfResults,data.frame(Model=Model,RMSE=RMSE))
   
 }
+
 ListOfResults <- ListOfResults[-1,] # Remove the first one
-
-#print(ListOfResults)
-#print(paste("Mean result",mean(ListOfResults$RMSE)))
-#print(paste("SD result",sd(ListOfResults$RMSE)))
-
 
 ```
 
-### `r Model` Model Predictions of `r MLParameterList$PredictionVariable`
+### `r Model` Model Predictions of `r MLParameterList$PredictionVariable` where red = prediction
 
 ```{r}
 
@@ -157,30 +151,6 @@ for (Model in ModelsToTest)
 {
   MLParameterList$RegressionModel           <- Model 
   Results <- MLTraining(MLParameterList,DataLoadParameters)
-  
-  # Plot the shape
-  Results$X <- seq(1,nrow(Results))
-  ResultsPlot <- ggplot(Results,aes(x=X,y=Prediction)) +
-    geom_point(aes(x=X,y=Prediction),
-               colour="Red",
-               fill="Darkred",
-               size=2) +
-    geom_point(aes(x=X,y=Actual),
-               colour="DarkGreen",
-               fill="DarkGreen",
-               size=1) +
-    xlab(paste("Row Number")) +
-    ylab(paste("Prediction")) +
-    theme(plot.title = element_text(size = 12),
-          axis.title.x = element_text(size = 10),
-          axis.title.y = element_text(size = 10),
-          text = element_text(size = 8)) 
-   # ggtitle(paste("Results",MLParameterList$ProjectTitle,"using model",Model))
-  
-  library(plotly)
-
-  #ggplotly(ResultsPlot)
-  #print(ResultsPlot)
   
   # Calculate RMSE
   RMSE          <- sqrt(mean(Results$Error * Results$Error))
