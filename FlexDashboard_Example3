@@ -35,7 +35,7 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,Da
 {
   if (Debug==TRUE) {print("Creating calibration data")}
   
-  DataSet <- "mtcars"
+  DataSet <- "Sunspots"
  
   # Used for classification example (set PredictionVariable = Species)
   if (DataSet == "Iris")
@@ -57,6 +57,32 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,Da
   {
     DataFrame = data.frame(mtcars)
     #DataFrame = head(DataFrame,500)
+  }
+  
+  if (DataSet == "Sunspots")
+  {
+    library(dplyr)
+    library(timetk)
+    library(lubridate)
+    library(tidyquant)
+    library(tibbletime)
+    
+    sun_spots <- datasets::sunspot.month %>%
+    tk_tbl() %>%
+    mutate(index = as_date(index)) %>%
+    as_tbl_time(index = index)
+    DataFrame <- as.data.frame(sun_spots)
+    colnames(DataFrame) <- c("Date","Sunspots")
+    DataFrame$Date <- NULL
+    
+    DataFrame <- LagDataFrame(DataFrame=DataFrame,     # Data frame name
+                  Column="Sunspots",       # Name of the column to be adjusted
+                  Periods=9,        # Number of intervals to go backwards or forwards
+                  MissingValues=NA, # What do you want the missing values to be (use NA so you can remove with na.omit())
+                  KeepAll=TRUE,    # Create columns for all periods in between
+                Backwards=TRUE)   # Set to true to create next values (ie n periods in the future)
+    DataFrame <- na.omit(DataFrame)
+    
   }
   
   if (Debug==TRUE) {print("Finished loading test data")}
@@ -85,11 +111,11 @@ DataLoadParameters <- SetDataLoadParameters(Debug=FALSE)
 MLParameterList    <- SetParameters(Debug=FALSE)
 
 MLParameterList$AutoScaling         <- TRUE
-MLParameterList$ProjectTitle        <- "MPG" #SpeciesNumber"
-MLParameterList$PredictionVariable  <- "Mpg" #"SpeciesNumber" 
+MLParameterList$ProjectTitle        <- "Sunspots" #SpeciesNumber"
+MLParameterList$PredictionVariable  <- "Sunspots" #"SpeciesNumber" 
 MLParameterList$SplitPercent        <- 80/100
 MLParameterList$Debug               <- FALSE
-MLParameterList$SamplingMethod            <- TRUE  # WARNING : Set to false for time series data
+MLParameterList$SamplingMethod            <- FALSE  # WARNING : Set to false for time series data
 MLParameterList$SaveModelToFile           <- TRUE
 MLParameterList$RegressionType      <- "regression" # regression or classification
 MLParameterList$OneHotEncodeFactors <- TRUE
