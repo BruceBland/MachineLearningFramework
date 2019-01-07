@@ -34,7 +34,7 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,Da
 {
   if (Debug==TRUE) {print("Creating calibration data")}
   
-  DataSet <- "MSFT"
+  DataSet <- "FTSE"
  
   # Used for classification example (set PredictionVariable = Species)
   if (DataSet == "Iris")
@@ -84,18 +84,14 @@ DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,Da
     
   }
   
-  if (DataSet == "MSFT")
+  if (DataSet == "FTSE")
   {
     
-    library(quantmod)
-  
-    getSymbols(c("MSFT"), from = "2000-01-01", auto.assign=TRUE)
-    DataFrame <- data.frame(MSFT)
-    
-    DataFrame <- data.frame(Date = rownames(DataFrame), Price=DataFrame$MSFT.Close)
+    DataFrame <- as.data.frame(EuStockMarkets)
+    DataFrame <- data.frame(Price=DataFrame$FTSE)
     DataFrame <- LagDataFrame(DataFrame=DataFrame,     # Data frame name
                   Column="Price",       # Name of the column to be adjusted
-                  Periods=9,        # Number of intervals to go backwards or forwards
+                  Periods=10,        # Number of intervals to go backwards or forwards
                   MissingValues=NA, # What do you want the missing values to be (use NA so you can remove with na.omit())
                   KeepAll=TRUE,    # Create columns for all periods in between
                 Backwards=TRUE)   # Set to true to create next values (ie n periods in the future)
@@ -125,7 +121,7 @@ MLParameterList    <- SetParameters(Debug=FALSE)
 MLParameterList$AutoScaling           <- TRUE
 MLParameterList$ProjectTitle          <- "Price" #SpeciesNumber"
 MLParameterList$PredictionVariable    <- "Price" #"SpeciesNumber" 
-MLParameterList$SplitPercent          <- 92/100
+MLParameterList$SplitPercent          <- 98/100
 MLParameterList$Debug                 <- FALSE
 MLParameterList$SamplingMethod        <- FALSE  # WARNING : Set to false for time series data
 MLParameterList$SaveModelToFile       <- TRUE
@@ -137,7 +133,7 @@ MLParameterList$DrawMissingValues     <- FALSE
 # Data analysis function
 MLDataAnalysis(MLParameterList,DataLoadParameters)
 
-Model = "RF"  # "RF","NN","KNN","RFRLT","SVM","KERAS","XGB","GLM"
+Model = "GLM"  # "RF","NN","KNN","RFRLT","SVM","KERAS","XGB","GLM"
 ```
 
 Column {data-width=650}
