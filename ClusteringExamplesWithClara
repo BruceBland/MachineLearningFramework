@@ -1,0 +1,193 @@
+# Clustering Examples
+
+# Now add the main machine learning library
+source("BenchTest_Machine_Learning_Framework.R")
+
+# Load a data set
+ClusterDataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,DataLoadParameters="")
+{
+  if (Debug==TRUE) {print("Creating calibration data")}
+  
+  DataSet <- "mtcars"
+  
+  # Used for classification example (set PredictionVariable = Species)
+  if (DataSet == "Iris")
+  {
+    DataFrame = data.frame(iris)
+    DataFrame$SpeciesNumber <- as.integer(DataFrame$Species)
+    DataFrame$Species <- NULL
+  }
+  
+  # Used for example of regression (Set PredictionVariable = mpg)
+  if (DataSet == "mtcars")
+  {
+    DataFrame = data.frame(mtcars)
+    #DataFrame = head(DataFrame,500)
+  }
+  
+  if (DataSet == "Sunspots")
+  {
+    library(dplyr)
+    library(timetk)
+    library(lubridate)
+    library(tidyquant)
+    library(tibbletime)
+    
+    sun_spots <- datasets::sunspot.month %>%
+      tk_tbl() %>%
+      mutate(index = as_date(index)) %>%
+      as_tbl_time(index = index)
+    DataFrame <- as.data.frame(sun_spots)
+    colnames(DataFrame) <- c("Date","Sunspots")
+    DataFrame$Date <- NULL
+    
+    DataFrame <- LagDataFrame(DataFrame=DataFrame,     # Data frame name
+                              Column="Sunspots",       # Name of the column to be adjusted
+                              Periods=9,        # Number of intervals to go backwards or forwards
+                              MissingValues=NA, # What do you want the missing values to be (use NA so you can remove with na.omit())
+                              KeepAll=TRUE,    # Create columns for all periods in between
+                              Backwards=TRUE)   # Set to true to create next values (ie n periods in the future)
+    DataFrame <- na.omit(DataFrame)
+    
+  }
+  
+  if (DataSet == "FTSE")
+  {
+    
+    DataFrame <- as.data.frame(EuStockMarkets)
+    DataFrame <- data.frame(Price=DataFrame$FTSE)
+    DataFrame <- LagDataFrame(DataFrame=DataFrame,     # Data frame name
+                              Column="Price",       # Name of the column to be adjusted
+                              Periods=10,        # Number of intervals to go backwards or forwards
+                              MissingValues=NA, # What do you want the missing values to be (use NA so you can remove with na.omit())
+                              KeepAll=TRUE,    # Create columns for all periods in between
+                              Backwards=TRUE)   # Set to true to create next values (ie n periods in the future)
+    DataFrame <- na.omit(DataFrame)
+  }
+  
+  if (Debug==TRUE) {print("Finished loading test data")}
+  
+  
+  
+  return(DataFrame)
+  
+}
+
+
+DataLoadAndFormat <- function(Backtest=TRUE,Debug=TRUE,ConvertToFactors=FALSE,DataLoadParameters="")
+{
+  NewDataFrame = NULL
+  
+  a <- FindKusingKmeans(DataFrame=mtcars)
+  
+  KMeans = TRUE
+  if (KMeans == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- KmeansClustering(DataFrame = DataFrame,
+                                           Columns="",
+                                           GroupColumnName="Example",
+                                           NumberOfClusters=2,
+                                           ScaleData = TRUE,
+                                           PlotModel = TRUE,
+                                           PlotLabels = TRUE,
+                                           Debug=FALSE)
+  }
+  
+  FuzzyHK = FALSE
+  if (FuzzyHK == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- FuzzyHkmeansClustering(DataFrame = DataFrame,
+                                    Columns="",
+                                    GroupColumnName="Example",
+                                    NumberOfClusters=4,
+                                    ScaleData = TRUE,
+                                    PlotModel = TRUE,
+                                    PlotLabels = TRUE,
+                                    Debug=FALSE)
+  }
+  
+  Fuzzy = FALSE
+  if (Fuzzy == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- FuzzyClustering(DataFrame = DataFrame,
+                                          Columns="",
+                                          GroupColumnName="Example",
+                                          NumberOfClusters=4,
+                                          ScaleData = TRUE,
+                                          PlotModel = TRUE,
+                                          PlotLabels = TRUE,
+                                          Plotsilhouette = TRUE,
+                                          Debug=FALSE,
+                                          IncludeMembership=TRUE)
+  }
+  
+  FuzzyCmeans = FALSE
+  if (FuzzyCmeans == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- FuzzyCMeansClustering(DataFrame = DataFrame,
+                                          Columns="",
+                                          GroupColumnName="Example",
+                                          NumberOfClusters=4,
+                                          ScaleData = TRUE,
+                                          PlotModel = TRUE,
+                                          PlotLabels = TRUE,
+                                          Debug=FALSE,
+                                          IncludeMembership=TRUE)
+  }
+  ModelBased = FALSE
+  if (ModelBased == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- ModelBasedClustering(DataFrame = DataFrame,
+                                          Columns="",
+                                          GroupColumnName="Example",
+                                          NumberOfClusters=0,
+                                          ScaleData = TRUE,
+                                          PlotModel = TRUE,
+                                          PlotLabels = TRUE,
+                                          Debug=FALSE,
+                                          PrintSummary=TRUE
+                                          )
+  }
+  DBScan = FALSE
+  if (DBScan == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- DBScanClustering(DataFrame = DataFrame,
+                                     Columns="",
+                                     GroupColumnName="Example",
+                                     MinNoPoints=0,
+                                     ScaleData = TRUE,
+                                     PlotModel = TRUE,
+                                     PlotLabels = TRUE,
+                                     Debug=TRUE,
+                                     EPSRadius=2.1
+    )
+    print(NewDataFrame)
+  }
+  
+  CLARA = FALSE
+  if (CLARA == TRUE)
+  {
+    DataFrame <- ClusterDataLoadAndFormat(Backtest=TRUE,Debug=FALSE,ConvertToFactors=FALSE,DataLoadParameters="")
+    NewDataFrame <- CLARAClustering(DataFrame = DataFrame,
+                                     Columns="",
+                                     GroupColumnName="Example",
+                                     NumberOfClusters=2,
+                                     ScaleData = TRUE,
+                                     PlotModel = TRUE,
+                                     PlotLabels = TRUE,
+                                     Debug=TRUE
+    )
+    print(NewDataFrame)
+  }
+  
+  return(NewDataFrame)
+  
+}
+
+df <- DataLoadAndFormat()
