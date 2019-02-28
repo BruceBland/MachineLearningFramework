@@ -1,0 +1,521 @@
+source("BenchTest_Machine_Learning_Framework.R")
+# Histogram and machine learning bins
+
+CreateBreaks <- function(Values="",Multiplier=2,Type="linear",Plot=TRUE,NumberOfBins=0,VariableName="Price",Debug=TRUE,MinBreaks=10,MaxBreaks=100)
+{
+  library(ggplot2)
+  
+  if (Debug==TRUE) {print("CreateBreaks started")}
+  
+  if (Debug==TRUE) {print(paste("Multiplier =",Multiplier))}
+  if (Debug==TRUE) {print(paste("Type       =",Type))}
+  if (Debug==TRUE) {print(paste("Plot       =",Plot))}
+  if (Debug==TRUE) {print(paste("NumberOfBins =",NumberOfBins))}
+  if (Debug==TRUE) {print(paste("VariableName =",VariableName))}
+  if (Debug==TRUE) {print(paste("Debug      =",Debug))}
+  if (Debug==TRUE) {print(paste("MinBreaks  =",MinBreaks))}
+  
+  if (NumberOfBins == 0)
+  {
+    if (Debug==TRUE) {print("Number of bins will be set automatically from data")}
+    
+    if (any(is.na(Values)) == FALSE)
+    {
+    
+      # The Freedman-Diaconis rule 
+      num_bins <- diff(range(Values)) / (2 * IQR(Values,na.rm = FALSE) / length(Values)^(1/3))
+    
+    } else {
+      
+      if (Debug==TRUE) {print("NA found in data column, returning NA")}
+      Breaks <- NA
+      return(Breaks)
+      
+    }
+  
+    # Do not return any breaks if we have and error calculating them
+    if (is.na(num_bins) == TRUE)
+    {
+      if (Debug==TRUE) {print("Zero breaks found, returning NA")}
+      Breaks <- NA
+      return(Breaks)
+    }
+    if (is.infinite(num_bins) == TRUE)
+    {
+      if (Debug==TRUE) {print("Infinate breaks found, returning NA")}
+      Breaks <- NA
+      return(Breaks)
+    }
+    if (num_bins > MaxBreaks)
+    {
+      num_bins <- MaxBreaks
+    }
+    
+    # Apply the multiplier
+    num_bins <- num_bins * Multiplier
+    
+  } else {
+    
+    if (Debug==TRUE) {print("Number of bins will be set by user")}
+    num_bins <- NumberOfBins
+    
+  }
+  
+  if (Debug==TRUE) {print(paste("Number of bins:",round(num_bins)))}
+  
+  
+  
+  if (Type == "linear")
+  {
+    # Work out the range and where to start from
+    Min <- min(Values)
+    Max <- max(Values)
+    Range <- Max - Min
+    Interval <- Range / round(num_bins)
+    Breaks <- Min
+    NextBreak = Min
+    for (bin in seq(1:round(num_bins)))
+    {
+      NextBreak <- NextBreak + Interval
+      Breaks <- append(Breaks,NextBreak)
+    }
+  }
+  
+  if (Type == "deciles")
+  {
+    # Now increase number to the min number of bins
+    if (num_bins < MinBreaks)
+    {
+      num_bins = MinBreaks
+      if (Debug==TRUE) {print(paste("To few bins, increasing number to min. Number of bins now set to:",round(num_bins)))}
+    }
+    
+    Quantiles <- quantile(Values, prob = seq(0, 1, length = num_bins+1), type = 5) # Set length = 11 for Deciles
+    Breaks <- as.numeric(Quantiles)
+  }
+  
+  if (Debug==TRUE) {print("Breaks found are:")}
+  if (Debug==TRUE) {print(Breaks)}
+  
+  # Bin reduction
+  # Reduce so that we do not get multiple breaks with the same value
+  UniqueValues <- length(unique(Breaks))
+  NumberOfBreaks <- length(Breaks)
+  if (UniqueValues < NumberOfBreaks)
+  {
+    Breaks <- unique(Breaks)
+  }
+  
+  if (Debug==TRUE) {print("Breaks found after unique value restriction are:")}
+  if (Debug==TRUE) {print(Breaks)}
+  
+  # Do not return any breaks if we have less than MinBreaks
+  if (length(Breaks) < MinBreaks)
+  {
+    if (Debug==TRUE) {print("Not enough breaks found, returning NA")}
+    Breaks <- NA
+  }
+  
+  # minus one from the min and add one to the max to ensure that we dont end up exactly on the
+  # boundery values - Cut will add NAs if you do
+  Breaks <- Breaks - 0.000001
+  Breaks[1] <- Breaks[1] - 1
+  Breaks[length(Breaks)] <- Breaks[length(Breaks)] + 1
+  
+  if (Plot == TRUE & length(Breaks) != 1)
+  {
+    # First work out the size of the gaps
+    Break_Gaps <- NULL
+    for (i in seq(1,length(Breaks)-1))
+    {
+      Break_Gap <- Breaks[i+1] - Breaks[i]
+      Break_Gaps <- append(Break_Gaps,Break_Gap)
+    }
+    x = seq(1,length(Breaks)-1)
+    y = Break_Gaps
+    
+    df <- data.frame(x,y)
+    BinGapPlot <- ggplot(df) + 
+      geom_line(aes(x=x,y=y)) + 
+      labs(title=paste("Bin Gaps of ",VariableName),x="Bin Number",y="Value Gap between Breaks")
+    print(BinGapPlot)
+    
+    HistPlot <- ggplot() + 
+      geom_histogram(aes(x=Values),breaks=Breaks) + 
+      labs(title=paste("Histogram of ",VariableName),x=VariableName,y="Count")
+    print(HistPlot)
+  }
+  
+  if (Debug==TRUE) {print("CreateBreaks finished")}
+  
+  #Breaks <- append(Breaks,Max)
+  return(Breaks)
+  
+}
+
+# Auto bin into catagories using breaks provided by CreateBreaks() function
+#    DataFrame="" - Data frame name to process
+#    Columns=""   - Column to process
+#    Debug=TRUE   - Switch on debug
+#    Breaks=""    - Breaks of splits you want (Use CreateBreaks function to create them)
+#    ReplaceColumns=TRUE  - Replaces the columns with the catagorical columns
+#    CreateOutlierBins=FALSE   - Any values found less than min put into lowest bin, and high than last bin
+#                                put into the last bin
+
+AutoBin <- function(DataFrame="",Columns="",Debug=TRUE,Breaks="",ReplaceColumns=TRUE,CreateOutlierBins=FALSE,Plot=TRUE)
+{
+  if (Debug==TRUE) {print("Autobin started")}
+  
+  # If the breaks could not be calculated an NA will be passed into this function
+  if (is.na(Breaks[1]) == TRUE)
+  {
+    return(DataFrame) 
+  }
+  
+  
+  
+  # Build Dataframe of columns required
+  AllCols <- NULL
+  ColNames <- NULL
+  for (col in Columns)
+  {
+    if (Debug==TRUE) {print(paste("Processing",col))}
+    Column <- DataFrame[,col]
+    
+    # If its numeric
+    if (is.numeric(Column) == TRUE)
+    {
+      Cats <- cut(Column, Breaks)
+      if (CreateOutlierBins == FALSE)
+      {
+        NewCats <- ifelse(Cats == 0,1,Cats)
+        NewCats <- ifelse(NewCats == length(Breaks),length(Breaks)-1,NewCats)
+        Cats <- NewCats
+      }
+      AllCols <- cbind(AllCols,Cats)
+      ColNames <- append(ColNames,paste(col,"_AutoBin",sep=""))
+      if (Debug==TRUE) {print(paste("Created new column ",col,"_AutoBin",sep=""))}
+      
+      # Plot the results
+      if (Plot==TRUE)
+      {
+        df <- data.frame(x=Column,y=Cats)
+        CatagoryPlot <- ggplot(df) + 
+          geom_step(aes(x=x,y=y)) + 
+          labs(title=paste("Catagories of",col),x="Column Value",y="Catagory")
+        print(CatagoryPlot)
+      }
+    }
+  }
+  
+  AllCols <- data.frame(AllCols)
+  colnames(AllCols) <- ColNames
+  
+  if (ReplaceColumns == TRUE)
+  {
+    for (col in Columns)
+    {
+      DataFrame[,col] <- NULL
+    }
+  }
+  
+  DataFrame <- cbind(DataFrame,AllCols)
+  
+  if (Debug==TRUE) {print("Autobin finished")}
+  
+  return(DataFrame)
+  
+}
+
+AutoBinAllNumeric <- function(DataFrame="",Columns="",Debug=TRUE,ReplaceColumns=TRUE,CreateOutlierBins=FALSE,Multiplier=1,Type="deciles",Plot=TRUE,MinBins = 10,MaxBins =100,
+                              ForceBins = 0)
+{
+  if (Debug==TRUE) {print("Autobin all numeric started")}
+  
+  # If we need to process all columns
+  if (Columns[1]=="") {
+    Columns <- colnames(DataFrame)
+  }  
+  
+  # Build Dataframe of columns required
+  AllCols <- NULL
+  ColNames <- NULL
+  for (cols in Columns)
+  {
+    # Get the column we are going to work on
+    Column <- DataFrame[,cols]
+    SingleColDF <- data.frame(cols=Column)
+    colnames(SingleColDF) <- cols
+    
+    # Check numeric, as we can only use these
+    if (is.numeric(Column) == TRUE)
+    {
+      
+      if (Debug==TRUE) {print(paste("Autobin working on column",cols))}
+      
+      # Work out the breaks using deciles or linear
+      TheseBreaks <- CreateBreaks(Column,
+                                  Multiplier=Multiplier,
+                                  Type=Type,
+                                  Plot=Plot,
+                                  NumberOfBins=ForceBins,
+                                  VariableName=cols,
+                                  MinBreaks=MinBins,
+                                  MaxBreaks=MaxBins,
+                                  Debug=Debug)
+      
+      # implement these breaks using cut
+      NewDF <- AutoBin(DataFrame=SingleColDF,
+                       Column=c(cols),
+                       Debug=Debug,
+                       Breaks=TheseBreaks,
+                       ReplaceColumns=ReplaceColumns,
+                       CreateOutlierBins=CreateOutlierBins,
+                       Plot=Plot)
+      
+      # Extract the new columns which will be at the end
+      NewColumn <- NewDF[,ncol(NewDF)]
+      NewColumnName <- colnames(NewDF)[length(NewDF)]
+      
+      # Add the replaced column
+      if (ReplaceColumns == FALSE & NewColumnName != cols)
+      {
+        # Now add te original column
+        ColNames <- append(ColNames,cols)
+        AllCols <- cbind(AllCols,DataFrame[,cols])
+      }
+      
+      # Now add the column we just created
+      ColNames <- append(ColNames,NewColumnName)
+      AllCols <- cbind(AllCols,NewColumn)
+      
+      
+      
+    }
+  }
+  
+  AllCols <- as.data.frame(AllCols)
+  colnames(AllCols) <- ColNames
+  rownames(AllCols) <- rownames(DataFrame)
+  
+  if (Debug==TRUE) {print("Autobin all numeric finished")}
+  
+  return(AllCols)
+  
+}
+
+PlotBinHeatmap <- function(DataFrame="",Columns="",Debug=FALSE,BinsRequired=0)
+{
+  
+  if (Debug==TRUE) {print("PlotBinHeatmap started")}
+  
+  # If we need to process all columns
+  if (Columns[1]=="") {
+    Columns <- colnames(DataFrame)
+  }
+  
+  NumberOfBins <- BinsRequired
+  
+  Columns <- Columns[grepl("_AutoBin", Columns)]
+  
+  ResultsDF <- NULL
+  FirstTime <- TRUE
+  for (col in Columns)
+  {
+    # Count the frequency
+    # Get the column we are going to work on
+    Column <- DataFrame[,col]
+    Freq <- as.data.frame(table(Column))
+    colnames(Freq)[2] <- col
+    
+    if (FirstTime == TRUE)
+    {
+      ResultsDF <- Freq
+      FirstTime <- FALSE
+      
+    } else {
+      
+      ResultsDF <- merge(ResultsDF,Freq,by="Column",all = TRUE)
+      
+    }
+    
+    
+  }
+  
+  library(reshape2)
+  
+  
+  
+  # Convert column to numeric to sort it
+  ResultsDF$Column <- as.numeric(as.character(ResultsDF$Column))
+  ResultsDF <- ResultsDF[order(ResultsDF$Column),]
+  
+  # Print results if we are in debug
+  if (Debug==TRUE) {print(head(ResultsDF),10)}
+  
+  # Melt the results to plot
+  melted1 <- ResultsDF %>% melt(id.vars = "Column")
+  
+  # Plot with ggplot2
+  HeatmapPlot <- ggplot(melted1, aes(x=Column,y= variable)) + 
+    geom_tile(aes(fill = value), colour = "grey") + 
+    scale_fill_gradient(low = "white",high = "steelblue") +
+    theme_minimal()
+  print(HeatmapPlot)
+  
+  if (Debug==TRUE) {print("PlotBinHeatmap finished")}
+  
+}
+
+
+AutoFieldAnalysis <- function(DataFrame="",Columns="",Debug=FALSE,BinsRequired=20)
+{
+  
+  if (Debug==TRUE) {print("AutoFieldAnalysis started")}
+  
+  # If we need to process all columns
+  if (Columns[1]=="") {
+    Columns <- colnames(DataFrame)
+  }
+  
+  NumberOfBins <- BinsRequired
+  
+  Columns <- Columns[grepl("_AutoBin", Columns)]
+  
+  ResultsDF <- NULL
+  FirstTime <- TRUE
+  for (col in Columns)
+  {
+    # Count the frequency
+    # Get the column we are going to work on
+    Column <- DataFrame[,col]
+    Freq <- as.data.frame(table(Column))
+    colnames(Freq)[2] <- col
+    
+    if (FirstTime == TRUE)
+    {
+      ResultsDF <- Freq
+      FirstTime <- FALSE
+      
+    } else {
+      
+      ResultsDF <- merge(ResultsDF,Freq,by="Column",all = TRUE)
+      
+    }
+    
+    
+  }
+  
+  library(reshape2)
+  
+  # Convert column to numeric to sort it
+  ResultsDF$Column <- as.numeric(as.character(ResultsDF$Column))
+  ResultsDF <- ResultsDF[order(ResultsDF$Column),]
+  
+  # Print results if we are in debug
+  if (Debug==TRUE) {print(head(ResultsDF),10)}
+  
+  # Analysis code 
+  NumOfNas <- function(x) {sum(is.na(x))}
+  
+  # First count NA's in a column
+  ColNas <- as.data.frame(apply(ResultsDF,2,NumOfNas))
+  colnames(ColNas)[1] <- "NumNas"
+  ColNas$BinsRequired <- as.numeric(BinsRequired)
+  ColNas$ValidBins <- ColNas$BinsRequired - ColNas$NumNas
+  
+  # Now add logic
+  ColNas$IS_BOOLEAN <- ifelse(ColNas$ValidBins == 2,1,0)
+  ColNas$IS_FACTOR <- ifelse(ColNas$ValidBins/ColNas$BinsRequired*100 < 50 & ColNas$IS_BOOLEAN != 1,1,0)
+  
+  #####
+  
+  if (Debug==TRUE) {print("AutoFieldAnalysis finished")}
+  
+  ColNas <- ColNas[-1,]
+  
+  return(ColNas)
+  
+}
+
+# Load data extract
+DataFrame <- read.csv("DataExtract.csv")
+df <- DataFrame
+
+# Example using mtcars
+BinsRequired <- 20
+Newdf <- AutoBinAllNumeric(DataFrame=df,
+                           Columns=c(""),
+                           Debug=FALSE,
+                           ReplaceColumns=FALSE,
+                           CreateOutlierBins=FALSE,
+                           Multiplier=1,
+                           Type="linear",
+                           Plot=FALSE,
+                           MinBins = 2, # Use when ForceBins is not zero to control min
+                           MaxBins = 20, # Use when ForceBins is not zero to control max
+                           ForceBins = BinsRequired) # 0 = Allow software to work out how many bins
+
+PlotBinHeatmap(Newdf,"",Debug=TRUE,BinsRequired=BinsRequired)
+
+# Perform Numeric Missing Value Search
+numericdf <- DataFrameMissingValuesSearch(DataFrame=df,Columns="",Debug = TRUE,OptionalSearchValues=c("NA","NULL","0","-999"))
+numericdf$Field <- rownames(numericdf)
+
+# Perform Missing Factors Search
+nonNumericdf <- DataFrameMissingFactorsSearch(DataFrame=df,Columns="",Debug = TRUE,OptionalSearchValues=c("NA","NULL"," ","-",".","0"))
+nonNumericdf$Field <- rownames(nonNumericdf)
+
+# Perform Duplicates Search
+duplicatesdf = DataFrameDuplicateColumnsSearch(DataFrame=df,Columns="",Debug=TRUE,ThresholdPercent=90)
+duplicatesdf$Field <- rownames(duplicatesdf)
+
+# Merge Frames
+ResultsFrame <- merge(duplicatesdf,numericdf,by="Field",all.x=TRUE)
+ResultsFrame <- merge(ResultsFrame,nonNumericdf,by="Field",all.x=TRUE)
+
+# Do Field Analysis
+FieldTypes <- AutoFieldAnalysis(Newdf,Columns="",Debug=TRUE,BinsRequired=BinsRequired)
+rownames(FieldTypes) <- gsub("_AutoBin", "", rownames(FieldTypes))
+
+FieldTypes$Field <- rownames(FieldTypes)
+ResultsFrame <- merge(ResultsFrame,FieldTypes,by="Field",all=TRUE)
+
+CombinedResults <- data.frame(Field=ResultsFrame$Field,
+                              IdentField=ResultsFrame$IdenticalField)
+CombinedResults$IS_Boolean <- ResultsFrame$IS_BOOLEAN
+CombinedResults$IS_Factor <- ResultsFrame$IS_FACTOR
+CombinedResults$NumNas <- ifelse(is.na(ResultsFrame$Nas.x)==TRUE, ResultsFrame$Nas.y,ResultsFrame$Nas.x)
+CombinedResults$NumNulls <- ifelse(is.na(ResultsFrame$Nulls.x)==TRUE, ResultsFrame$Nulls.y,ResultsFrame$Nulls.x)
+CombinedResults$NumZeros <- ifelse(is.na(ResultsFrame$Zeros.x)==TRUE, ResultsFrame$Zeros.y,ResultsFrame$Zeros.x)
+CombinedResults$Num999s <- ResultsFrame$Num999s
+CombinedResults$NumDashs <- ResultsFrame$Dashs
+CombinedResults$NumDots <- ResultsFrame$Dots
+CombinedResults$NumSpaces <- ResultsFrame$SpaceOrBlanks
+CombinedResults$PercentInIssue <- ifelse(is.na(ResultsFrame$PercentInIssue.x)==TRUE, ResultsFrame$PercentInIssue.y,ResultsFrame$PercentInIssue.x)
+CombinedResults$Unfit <- ifelse(CombinedResults$PercentInIssue > 90,1,0)
+
+UnfitResults <- subset(CombinedResults,Unfit == 1)
+FitResults <- subset(CombinedResults,Unfit == 0)
+
+NONBooleanOrFactorColumns <- subset(FitResults,IS_Boolean == 0 & IS_Factor == 0)
+GoodColumns <- NONBooleanOrFactorColumns[,1]
+
+df <- DataFrame[,GoodColumns]
+
+BinsRequired <- 5
+Newdf <- AutoBinAllNumeric(DataFrame=df,
+                           Columns=c(""),
+                           Debug=FALSE,
+                           ReplaceColumns=FALSE,
+                           CreateOutlierBins=FALSE,
+                           Multiplier=1,
+                           Type="linear",
+                           Plot=FALSE,
+                           MinBins = 2, # Use when ForceBins is not zero to control min
+                           MaxBins = 20, # Use when ForceBins is not zero to control max
+                           ForceBins = BinsRequired) # 0 = Allow software to work out how many bins
+
+PlotBinHeatmap(Newdf,"",Debug=TRUE,BinsRequired=BinsRequired)
+
+
