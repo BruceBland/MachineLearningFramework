@@ -1,0 +1,56 @@
+---
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r RemoveOldData, message=FALSE, warning=FALSE, include=FALSE}
+
+rm(list = ls())         # Remove all previous data
+
+library(pander)
+
+# Format dates for storing files
+Date <- Sys.Date()
+Time <- Sys.time()
+Date <- format(Date,"%Y%m%d")
+Time <- format(Time,"%H%M%S")
+NowString <- paste(Date,"-",Time,sep="")
+
+```
+
+#Data Analysis using BenchTest
+
+#####*Created date : **`r Sys.Date()`** *
+#####By: B G Bland
+
+#Introduction
+
+This document looks at a number of functions provided by the BenchTest package and gives working examples of how they can be used to provide basic data analysis of a set of well known data sets.
+
+#Visualisation of data
+
+The document will also show how better visualisation can help understand the data being analysed as well as provide others with a better explaination of the analysis being carried out.
+
+#MTCARS Data set
+
+Whereever possible the MTCARS data set will be used. This is pre-installed with base R and although it contains little data, the principles of data analysis do remain largely the same.
+
+#Document sections
+
+The document will be split into a number of different sections covering different types of data as follows:
+
+*Data formats in R - Handling data formating
+
+*Numeric data, and regression principles
+
+*Missing data, outliers
+
+*Binning data and histgrams
+
+*Automatic binning and initial field analysis
+
+*Success and failure plots
+
