@@ -1,0 +1,186 @@
+---
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r RemoveOldData, message=FALSE, warning=FALSE, include=FALSE}
+
+rm(list = ls())         # Remove all previous data
+
+library(pander)
+
+# Format dates for storing files
+Date <- Sys.Date()
+Time <- Sys.time()
+Date <- format(Date,"%Y%m%d")
+Time <- format(Time,"%H%M%S")
+NowString <- paste(Date,"-",Time,sep="")
+
+```
+
+#Data Types and Formating
+
+#####*Created date : **`r Sys.Date()`** *
+#####By: B G Bland
+
+#Introduction
+
+This document looks at how important data formats are in the analysis of data, and in using the data for machine learning.
+
+#Data formats
+
+Whereever the data is sourced from, the user of that data must ensure that both the quality and format of the data is consistant, and reproduceable. If loaded from a CSV file for example R will make decisions about the data types and formats that it will use. It is wise however to ensure that these formats selected match the uses planned for it!. MAchine learning can often fail at this most basic step.
+
+R stores all data as vectors, and the simplest forms as shown below:
+
+a <- c(1,2,5.3,6,-2,4) # numeric vector
+b <- c("one","two","three") # character vector
+c <- c(TRUE,TRUE,TRUE,FALSE,TRUE,FALSE) #logical vector
+
+To make data analysis easier, R will also format data into factors. This may be useful, or as often is the case, may actually be unhelpful when it comes to machine learning.
+
+To find out what type of data you have, the best place to start is to use the class() function.
+
+```{r}
+
+a <- c(1,2,3,4,5,-1,2.3)
+print(class(a))
+
+```
+
+As we can see this is a simple numeric type.
+
+However we may want numeric types to be factors such as when the number represents a classification or staff number etc.
+
+```{r}
+a <- c(1,2,3) # Low, medium, and high
+a <- factor(a)
+print(class(a))
+print(a)
+```
+
+or as ordered factor:
+
+```{r}
+a <- c(1,2,3) # Low, medium, and high
+a <- factor(a,ordered = TRUE)
+print(class(a))
+print(a)
+```
+
+#Conversion between formats
+
+Often a format can be incorrect and must be process before the data can be used, such as numerics, characters, dates, and times. This can be handled as follows:
+
+##Numeric Data
+
+Convertion examples:
+
+```{r}
+# Make a vector numeric from character
+a <- c("1","2","3")
+a <- as.numeric(a)
+print(a)
+
+# To mke vector character format
+b <- as.character(a)
+print(b)
+
+# Make a factor numeric
+a <- c(1,2,3) # Low, medium, and high
+a <- factor(a,ordered = TRUE)
+print(class(a))
+print(a)
+b <- as.numeric(as.character(a))
+print(b)
+print(class(b))
+
+```
+
+#Loading data from CSV
+
+To load data from a CSV file is simple using read.csv() function. However if only numeric data is required stringsAsFactors = FALSE must be added. 
+
+```{r}
+
+# Write file
+write.csv(mtcars,"mtcars.csv")
+
+# Now read the file back
+ThisDF <- read.csv("mtcars.csv",stringsAsFactors=FALSE)
+
+print(head(ThisDF,5))
+
+```
+
+
+#Using BenchTest package
+
+The BenchTest source can be loaded using the following command after dropping the file in the local directory. It is suggest that R studio projects are used, and this file would typically be added to a project by copying the file to the project directory.
+
+```{r}
+
+source("BenchTest_Machine_Learning_Framework_Beta.R")
+
+```
+
+#Simple Analysis of Data Frame
+
+##Max/Min/Mean
+
+The DataFrameMinMaxMeans function can be used to summarise the columns to find the min, max, mean and standard deviation of the data. This can be checked for obvious issues such as:
+
+1) Min of zero when not expecting any
+2) Max much higher than expected
+3) Standard deviation higher than expected (may be odd values or missing values)
+
+```{r}
+Results <- DataFrameMinMaxMeans(DataFrame=mtcars,
+                  Columns="",
+                  Debug=TRUE,
+                  DecimalPlaces=2,
+                  OptionalColumns=c("min","max","mean","sd"))
+print(Results)
+
+```
+
+
+##Field Analysis - Histograms
+
+The following AutoBinAllNumeric and AutoFieldAnalysis functions can be used to analyse the data once checked that no extreme values exist in the data.
+
+```{r}
+
+Newdf <- AutoBinAllNumeric(DataFrame=mtcars,
+                  Columns=c("mpg","wt"),    # use Columns = "" for all
+                  Debug=FALSE,
+                  ReplaceColumns=TRUE,
+                  CreateOutlierBins=FALSE,
+                  Multiplier=1,
+                  Type="linear",
+                  Plot=TRUE,
+                  MinBins = 10,
+                  MaxBins =100,
+                  ForceBins = 10)
+
+```
+
+##Missing Values Analysis
+
+The auto bin columns created above can be used to check for missing values by checking for invalid bins.
+
+```{r}
+
+Results <- AutoFieldAnalysis(DataFrame=Newdf,
+                             Columns="",
+                             Debug=FALSE,
+                             BinsRequired=20)
+
+print(Results)
+
+```
+
+
