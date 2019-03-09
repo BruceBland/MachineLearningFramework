@@ -1,0 +1,168 @@
+
+
+# Calculate the woe for factors
+CalcWOEForFactors <- function(DataFrame="",
+                              Columns="",
+                              Debug=TRUE,
+                              Plot=TRUE,
+                              SuccessField="",OptionalPlots=c("PercentSuccess","NumSuccess","NumFailures","Woe","NumInBins"))
+{
+  if (Debug==TRUE) {print("CalcWOEForFactors all numeric started")}
+  
+  # If we need to process all columns
+  if (Columns[1]=="") {
+    Columns <- colnames(DataFrame)
+  }  
+  
+  # Extract the Success column
+  SuccessColumn <- DataFrame[,SuccessField]
+  
+  # Build Dataframe of columns required
+  AllCols <- NULL
+  ColNames <- NULL
+  for (cols in Columns)
+  {
+    # Get the column we are going to work on
+    Column <- DataFrame[,cols]
+    SingleColDF <- data.frame(cols=Column)
+    colnames(SingleColDF) <- cols
+    
+    # Check numeric, we only want factors
+    if (is.numeric(Column) != TRUE)
+    {
+      if (is.character(Column) == TRUE)
+      {
+        if (Debug==TRUE) {print(paste("Making column a factor: Column ... ",cols))}
+        Column <- factor(Column)  # Make a factor so we can process it
+      }
+      
+      if (Debug==TRUE) {print(paste("CalcWOEForFactors working on column",cols))}
+      
+      MiniDF <- data.frame(Success=SuccessColumn,Column=Column)
+      
+      SummaryDF <- MiniDF %>%
+        group_by(Success) %>%
+        summarise(
+          Count=length(Success),
+          PercentTotal = round(Count/nrow(MiniDF)*100,1))
+      
+      NumAllSuccess <- SummaryDF$Count[2]
+      NullAllFailures <- SummaryDF$Count[1]
+      
+      print(paste("Total number of success was",NumAllSuccess))
+      print(paste("Total number of failures was",NullAllFailures))
+      
+      
+      #ColSummaryDF <- MiniDF %>%
+      #  group_by(Success,Column) %>%
+      #  summarise(
+      #            Count=length(Success),
+      #            PercentTotal = round(Count/nrow(MiniDF)*100,1))
+      
+      ResultsDF <- NA
+      UniqueFactor <- unique(Column)
+      
+      for (EachFactor in UniqueFactor)
+      {
+        
+        # Get each factor we need
+        AllinFactor <- subset(MiniDF,Column==EachFactor)
+        NumInFactor <- nrow(AllinFactor)
+        
+        # How many were a success
+        SuccessDF <- subset(AllinFactor,Success==1)
+        NumSuccess <- nrow(SuccessDF)
+        
+        # Calc failures
+        NumFailures <- NumInFactor - NumSuccess
+        PercentSuccess <- round(NumSuccess/(NumSuccess+NumFailures) * 100,2)
+        
+        # Calc WOE
+        Woe <- log(NumFailures/NumSuccess) - log(NullAllFailures/NumAllSuccess)
+        
+        # Store Results
+        NewResultDF <- data.frame(Column=cols,Factor=EachFactor,PercentSuccess=PercentSuccess,Woe=Woe,NumSuccess=NumSuccess,NumFailures=NumFailures,NumInFactor=NumInFactor)
+        ResultsDF <- rbind(ResultsDF,NewResultDF)
+        
+      }
+      
+      ResultsDF <- ResultsDF[-1,] # Remove the blank row caused by setting to NA at the begining
+      
+      ResultsDF <- ResultsDF[order(-ResultsDF$PercentSuccess),]
+      
+      if (Debug==TRUE) {print(ResultsDF)}
+      
+    }
+  }
+  
+  if (Plot==TRUE)
+  {
+    if ("PercentSuccess" %in% OptionalPlots)
+    {
+      # Plot PercentSuccess
+      HeatmapPlot <- ggplot(ResultsDF, aes(x=Bin,y= Column)) + 
+        geom_tile(aes(fill = PercentSuccess), colour = "grey") + 
+        scale_fill_gradient(low = "white",high = "darkgreen") +
+        theme_minimal()
+      print(HeatmapPlot)
+    }
+    
+    if ("NumSuccess" %in% OptionalPlots)
+    {
+      # Plot NumSuccess
+      HeatmapPlot <- ggplot(ResultsDF, aes(x=Bin,y= Column)) + 
+        geom_tile(aes(fill = NumSuccess), colour = "grey") + 
+        scale_fill_gradient(low = "white",high = "lightgreen") +
+        theme_minimal()
+      print(HeatmapPlot)
+    }
+    
+    if ("NumFailures" %in% OptionalPlots)
+    {
+      # Plot NumFailures
+      HeatmapPlot <- ggplot(ResultsDF, aes(x=Bin,y= Column)) + 
+        geom_tile(aes(fill = NumFailures), colour = "grey") + 
+        scale_fill_gradient(low = "white",high = "firebrick1") +
+        theme_minimal()
+      print(HeatmapPlot)
+    }
+    
+    if ("Woe" %in% OptionalPlots)
+    {
+      # Plot with ggplot2
+      HeatmapPlot <- ggplot(ResultsDF, aes(x=Bin,y= Column)) + 
+        geom_tile(aes(fill = Woe), colour = "grey") + 
+        scale_fill_gradient(low = "white",high = "firebrick4") +
+        theme_minimal()
+      print(HeatmapPlot)
+    }
+    
+    if ("NumInBins" %in% OptionalPlots)
+    {
+      # Plot with ggplot2
+      HeatmapPlot <- ggplot(ResultsDF, aes(x=Bin,y= Column)) + 
+        geom_tile(aes(fill = NumInBins), colour = "grey") + 
+        scale_fill_gradient(low = "white",high = "firebrick4") +
+        theme_minimal()
+      print(HeatmapPlot)
+    }
+  }
+  
+  if (Debug==TRUE) {print("CalcWOEForFactors all numeric finished")}
+  
+  return(NA)
+}
+
+df <- mtcars
+df$Success = ifelse(df$cyl == 4,1,0)
+
+# Create two factors
+df$am <- factor(df$am)
+df$gear <- as.character(df$gear)
+
+a <- CalcWOEForFactors(DataFrame = df,
+                       Columns=c("am","gear"),
+                       Debug=TRUE,
+                       Plot=FALSE,
+                       SuccessField="Success",
+                       OptionalPlots=c("PercentSuccess","NumSuccess","NumFailures","Woe","NumInBins"))
