@@ -1,0 +1,4 @@
+# Make up the Plumber API script
+pr <- plumber::plumb("plumberexample.R")
+
+pr$run()
