@@ -1,0 +1,87 @@
+# Now add the main machine learning library
+source("BenchTest_Machine_Learning_Framework.R")
+
+MinNoInGroup <- 2
+
+DataFrame <- mtcars
+#DataFrame$Species <- NULL
+
+# Use DB Scan clustering
+DataFrame <- DBScanClustering(DataFrame = DataFrame,
+                                 Columns="",
+                                 GroupColumnName="Example",
+                                 MinNoPoints=1,
+                                 ScaleData = TRUE,
+                                 PlotModel = TRUE,
+                                 PlotLabels = TRUE,
+                                 Debug=TRUE,
+                                 EPSRadius=1)
+# Calculate medians 
+Medians <- DataFrame %>%
+  group_by(Example_Cluster_Group) %>%
+  summarize_all(median)
+print(Medians)
+    
+# Add the item numbers
+DataFrame$ItemNo <- seq(1,nrow(DataFrame))
+
+# Now process like cars
+CarsByGroup <- data.frame(ItemNo = DataFrame$ItemNo,
+                          Item = rownames(DataFrame),
+                          Group = DataFrame$Example_Cluster_Group)
+
+Groups <- CarsByGroup %>%
+  group_by(Group) %>%
+  summarize(No = n(),
+            ItemNos=paste(ItemNo, collapse=","),
+            ItemNames = paste(Item, collapse=","))
+print(Groups)
+
+################ Loop ############################
+
+SingleInstances <- 3
+EPSRadiusValue <- 2
+
+while(SingleInstances > 0)
+{
+  
+  EPSRadiusValue <- EPSRadiusValue + 0.5
+  
+  # Use DB Scan clustering
+  DataFrame <- Medians
+  DataFrame$Example_Cluster_Group <- NULL
+  DataFrame <- DBScanClustering(DataFrame = DataFrame,
+                                Columns="",
+                                GroupColumnName="Example",
+                                MinNoPoints=1,
+                                ScaleData = TRUE,
+                                PlotModel = TRUE,
+                                PlotLabels = TRUE,
+                                Debug=TRUE,
+                                EPSRadius=EPSRadiusValue)
+  
+  Medians <- DataFrame %>%
+    group_by(Example_Cluster_Group) %>%
+    summarize_all(median)
+  print(Medians)
+  
+  DataFrame$ItemNos <- Groups$ItemNos
+  DataFrame$ItemNames <- Groups$ItemNames
+  
+  # Now process like cars
+  CarsByGroup <- data.frame(ItemNo = DataFrame$ItemNos,
+                            Items = DataFrame$ItemNames,
+                            Group = DataFrame$Example_Cluster_Group)
+  
+  Groups <- CarsByGroup %>%
+    group_by(Group) %>%
+    summarize(No = n(),
+              ItemNos=paste(ItemNo, collapse=","),
+              ItemNames = paste(Items, collapse=","))
+  
+  
+  SingleInstances <- nrow(subset(Groups,str_count(Groups$ItemNos, ',') <= MinNoInGroup - 2))
+
+}
+
+print(Groups)
