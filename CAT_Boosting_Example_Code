@@ -1,0 +1,48 @@
+# Install devtools from CRAN
+#install.packages("devtools")
+
+
+# Or the development version from GitHub:
+# install.packages("devtools")
+#devtools::install_github("r-lib/devtools")
+
+#library(devtools)
+#options(devtools.install.args = c("--no-multiarch", "--no-test-load"))
+#devtools::install_url('https://github.com/catboost/catboost/releases/download/v0.11.1/catboost-R-Windows-0.11.1.tgz', INSTALL_opts = c("--no-multiarch", "--no-test-load"))
+
+library(catboost)
+
+Features <- mtcars[1:20,2:11]
+Labels <- mtcars[1:20,1]
+
+TestDataFrame <- mtcars[21:32,2:11]
+TestLabels <- mtcars[21:32,1]
+
+train_pool <- catboost.load_pool(data = Features, label = Labels)
+
+params <- list(iterations=1000,
+               learning_rate=0.01,
+               depth=10,
+               loss_function='RMSE',
+               eval_metric='RMSE',
+               random_seed = 55,
+               od_type='Iter',
+               metric_period = 50,
+               od_wait=20,
+               use_best_model=TRUE)
+
+model <- catboost.train(train_pool,  NULL,
+                        params = params)
+
+real_pool <- catboost.load_pool(TestDataFrame)
+
+prediction <- catboost.predict(model, real_pool)
+print(prediction)
+TestDataFrame$Labels <- TestLabels
+TestDataFrame$Prediction <- prediction
+
+plot(TestDataFrame$Labels,TestDataFrame$Prediction)
+
+#calculate error metrics
+library(caret)
+print(postResample(TestDataFrame$Prediction,TestDataFrame$Labels))
